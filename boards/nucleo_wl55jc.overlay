@@ -1,0 +1,16 @@
+#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+    aliases {
+        sw0 = &user_button_1;
+    };
+};
+
+&usart1 {
+status = "okay";
+current-speed = <9600>; // This value depends on the connected device
+pinctrl-0 = <&usart1_tx_pb6 &usart1_rx_pb7>;
+pinctrl-names = "default";
+};
+
