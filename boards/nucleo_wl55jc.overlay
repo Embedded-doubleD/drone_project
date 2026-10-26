@@ -3,14 +3,109 @@
 
 / {
     aliases {
-        sw0 = &user_button_1;
+        /* RGB LED Alias */
+        led-red = &red_led_node;
+        led-green = &green_led_node;
+        led-blue = &blue_led_node;
+
+        /* Sensor Input */
+        ldr-pwr = &ldr_pwr_node;
+        analog-in = &adc_ldr_channel;
+
+        /* User Buttons & Buses */
+        sw0 = &user_button_2;
+        i2c-bus = &i2c1;
+        gps = &usart1;
+    };
+
+    /* 1. RGB LED (Common Anode) */
+    rgb_leds {
+        compatible = "gpio-leds";
+        
+        red_led_node: red_led_node {
+            gpios = <&gpiob 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+            label = "RGB_LED_RED";
+        };
+        
+        green_led_node: green_led_node {
+            gpios = <&gpioc 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+            label = "RGB_LED_GREEN";
+        };
+        
+        blue_led_node: blue_led_node {
+            gpios = <&gpioa 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+            label = "RGB_LED_BLUE";
+        };
+    };
+
+    /* 2. On-Demand Power Supply Node for LDR Divisor */
+    ldr_pwr_supply {
+        compatible = "gpio-leds";
+        
+        ldr_pwr_node: ldr_pwr_node {
+            gpios = <&gpioc 1 GPIO_ACTIVE_HIGH>;
+            label = "LDR_POWER_SUPPLY";
+        };
+    };
+
+    /* 3. User Button Configuration */
+    gpio_keys {
+        compatible = "gpio-keys";
+        
+        user_button_2: button_2 {
+            gpios = <&gpioa 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+            label = "User_Button_B2";
+        };
+    };
+
+    /* 4. ADC Channel Mapping for LDR */
+    zephyr,user {
+        io-channels = <&adc1 5>; /* ADC1 Channel 5 mapped to PB1 */
     };
 };
 
-&usart1 {
-status = "okay";
-current-speed = <9600>; // This value depends on the connected device
-pinctrl-0 = <&usart1_tx_pb6 &usart1_rx_pb7>;
-pinctrl-names = "default";
+/* 5. I2C Bus Overlay for MPU6050 & Si7021 */
+&i2c1 {
+    status = "okay";
+    pinctrl-0 = <&i2c1_scl_pa9 &i2c1_sda_pa10>;
+    pinctrl-names = "default";
+    clock-frequency = <I2C_BITRATE_STANDARD>; /* 100 kHz */
+
+    /* MPU6050 Motion Sensor Node */
+    mpu6050: mpu6050@68 {
+        compatible = "invensense,mpu6050";
+        reg = <0x68>;
+        status = "okay";
+        int-gpios = <&gpioa 6 GPIO_ACTIVE_HIGH>;
+    };
+
+    /* Si7021 Humidity & Temp Sensor Node */
+    si7021: si7021@40 {
+        compatible = "silabs,si7021";
+        reg = <0x40>;
+        status = "okay";
+    };
 };
 
+/* 6. ADC Peripheral Enable */
+&adc1 {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    adc_ldr_channel: channel@5 {
+        reg = <5>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL"; /* 3.3V VREF */
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>; /* 12-bit ADC (0 - 4095) */
+    };
+};
+
+/* 7. UART Peripheral for GPS Module */
+&usart1 {
+    status = "okay";
+    current-speed = <9600>;
+    pinctrl-0 = <&usart1_tx_pa2 &usart1_rx_pa3>;
+    pinctrl-names = "default";
+};
