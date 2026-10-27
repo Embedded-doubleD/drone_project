@@ -15,10 +15,10 @@
         /* User Buttons & Buses */
         sw0 = &user_button_2;
         i2c-bus = &i2c1;
-        gps = &usart1;
+        gps = &usart2;
     };
 
-    /* 1. RGB LED (Common Anode) */
+    /* RGB LED (Common Anode) */
     rgb_leds {
         compatible = "gpio-leds";
         
@@ -38,27 +38,18 @@
         };
     };
 
-    /* 2. On-Demand Power Supply Node for LDR Divisor */
+    /* On-Demand Power Supply Node for LDR Divisor */
     ldr_pwr_supply {
         compatible = "gpio-leds";
         
         ldr_pwr_node: ldr_pwr_node {
-            gpios = <&gpioc 1 GPIO_ACTIVE_HIGH>;
+            gpios = <&gpiob 2 GPIO_ACTIVE_HIGH>;
             label = "LDR_POWER_SUPPLY";
         };
     };
 
-    /* 3. User Button Configuration */
-    gpio_keys {
-        compatible = "gpio-keys";
-        
-        user_button_2: button_2 {
-            gpios = <&gpioa 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-            label = "User_Button_B2";
-        };
-    };
 
-    /* 4. ADC Channel Mapping for LDR */
+    /* ADC Channel Mapping for LDR */
     zephyr,user {
         io-channels = <&adc1 5>; /* ADC1 Channel 5 mapped to PB1 */
     };
@@ -76,7 +67,7 @@
         compatible = "invensense,mpu6050";
         reg = <0x68>;
         status = "okay";
-        int-gpios = <&gpioa 6 GPIO_ACTIVE_HIGH>;
+        /* int-gpios = <&gpioa 6 GPIO_ACTIVE_HIGH>; */
     };
 
     /* Si7021 Humidity & Temp Sensor Node */
@@ -103,9 +94,9 @@
 };
 
 /* 7. UART Peripheral for GPS Module */
-&usart1 {
+&usart2 {
     status = "okay";
     current-speed = <9600>;
-    pinctrl-0 = <&usart1_tx_pa2 &usart1_rx_pa3>;
+    pinctrl-0 = <&usart2_tx_pa2 &usart2_rx_pa3>;
     pinctrl-names = "default";
 };
