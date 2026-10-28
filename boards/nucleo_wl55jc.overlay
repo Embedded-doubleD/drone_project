@@ -10,7 +10,7 @@
 
         /* Sensor Input */
         ldr-pwr = &ldr_pwr_node;
-        analog-in = &adc_ldr_channel;
+        analog-in-pin = &zephyr_user;
 
         /* User Buttons & Buses */
         sw0 = &user_button_2;
@@ -50,7 +50,7 @@
 
 
     /* ADC Channel Mapping for LDR */
-    zephyr,user {
+    zephyr_user: zephyr,user {
         io-channels = <&adc1 5>; /* ADC1 Channel 5 mapped to PB1 */
     };
 };
