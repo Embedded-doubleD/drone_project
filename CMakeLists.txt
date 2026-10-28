@@ -7,10 +7,16 @@ project(drone_project)
 
 target_sources(app PRIVATE
     src/main.c
-    src/events.c
-    src/fsm.c
-    src/ldr_service.c
-    src/led.c
+    src/app/events.c
+    src/app/fsm.c
+    src/sensors/ldr_service.c
+    src/output/led.c
 )
 
-target_include_directories(app PRIVATE)
+target_include_directories(app PRIVATE
+    src
+    src/app
+    src/sensors
+    src/output
+    src/input
+)

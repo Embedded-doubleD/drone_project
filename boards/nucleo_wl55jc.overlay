@@ -64,15 +64,15 @@
 
     /* MPU6050 Motion Sensor Node */
     mpu6050: mpu6050@68 {
-        compatible = "invensense,mpu6050";
+        compatible = "i2c-device";
         reg = <0x68>;
         status = "okay";
-        /* int-gpios = <&gpioa 6 GPIO_ACTIVE_HIGH>; */
+        int-gpios = <&gpioa 6 GPIO_ACTIVE_HIGH>;
     };
 
     /* Si7021 Humidity & Temp Sensor Node */
     si7021: si7021@40 {
-        compatible = "silabs,si7021";
+        compatible = "i2c-device";
         reg = <0x40>;
         status = "okay";
     };
