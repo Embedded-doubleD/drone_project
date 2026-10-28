@@ -7,13 +7,8 @@
 /* Configured ADC resolution: 12 bits, with values from 0 to 4095. */
 #define ADC_FULL_SCALE 4095U
 
-/*
- * Types of messages that services can publish. EVENT_NONE serves as the
- * initial value; the remaining three events represent button input or a
- * measurement already obtained by the LDR service.
- */
+/* Types of messages that services can publish. */
 typedef enum {
-    EVENT_NONE = 0,
     EVENT_BUTTON_SHORT_PRESS,
     EVENT_BUTTON_LONG_PRESS,
     EVENT_ADC_READING,

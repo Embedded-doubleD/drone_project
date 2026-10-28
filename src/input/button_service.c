@@ -1,5 +1,5 @@
 #include "button_service.h"
-#include "events.h"
+#include "app/events.h"
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/printk.h>
 

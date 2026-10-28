@@ -11,6 +11,7 @@ target_sources(app PRIVATE
     src/app/fsm.c
     src/sensors/ldr_service.c
     src/output/led.c
+    src/input/button_service.c
 )
 
 target_include_directories(app PRIVATE
