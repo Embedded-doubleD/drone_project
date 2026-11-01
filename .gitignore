@@ -430,7 +430,9 @@ FodyWeavers.xsd
 
 # Zephyr Compilation Data
 /build
+**/build
 /.zephyr-cache
+**/-zephyr-cache
 
 # Mac Files
 .DS_Store
