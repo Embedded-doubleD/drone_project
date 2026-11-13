@@ -2,7 +2,7 @@
 #include <zephyr/sys/printk.h>
 #include "events.h"
 #include "ldr_service.h"
-#include "led.h"
+#include "led_service.h"
 #include "fsm.h"
 
 #define FSM_STACK_SIZE 1024

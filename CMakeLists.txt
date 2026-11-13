@@ -13,6 +13,7 @@ target_sources(app PRIVATE
     src/output/led_service.c
     src/input/button_service.c
     src/telemetry/telemetry_data.c
+    src/telemetry/simu_frame.c
 )
 
 target_include_directories(app PRIVATE

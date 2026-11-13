@@ -31,8 +31,8 @@ The hardware system integrates five main sensor/actuator peripherals connected t
 | **MPU6050 IMU** | I2C Address Select | `GND` | - | Tied to GND (Fixes I2C Address `0x68`) | `mpu6050@68` |
 | | Interrupt Signal | `PA6` | `D12` | *Unused / Disconnected* (Polled via I2C) | - |
 | **Si7021 Sensor** | Temp & Humidity | - | - | Connected to shared I2C Bus (`0x40`) | `si7021@40` |
-| **Ultimate GPS PA6H** | MCU RX <- GPS TX | **`PA3`** | **`D0`** (CN9 Pin 1) | UART RX Signal (9600 bps NMEA) | `&usart2` / `gps` |
-| | MCU TX -> GPS RX | **`PA2`** | **`D1`** (CN9 Pin 2) | UART TX Signal (9600 bps NMEA) | `&usart2` / `gps` |
+| **Ultimate GPS PA6H** | MCU RX <- GPS TX | **`PB7`** | **`D0`** (CN9 Pin 1) | USART1 RX (9600 bps NMEA) | `&usart1` / `gps` |
+| | MCU TX -> GPS RX | **`PB6`** | **`D1`** (CN9 Pin 2) | USART1 TX (9600 bps). Optional: only needed to send commands to the module | `&usart1` / `gps` |
 | **LDR Light Sensor** | ADC Analog Input | **`PB1`** | **`A0`** (CN8 Pin 1) | Channel `ADC1_IN5` (12-bit, 0–4095) | `&adc1 channel@5` / `analog-in` |
 | | Power Supply Control | **`PB2`** | **`A1`** (CN8 Pin 2) | GPIO Output (Gated 3.3V Power Supply) | `ldr_pwr_node` / `ldr-pwr` |
 | **Common Anode RGB LED** | Red Cathode | **`PB3`** | **`D3`** (CN9 Pin 4) | Active Low (`GPIO_ACTIVE_LOW`), 220 Ohm Resistor | `red_led_node` / `led-red` |
@@ -50,10 +50,10 @@ The hardware system integrates five main sensor/actuator peripherals connected t
 * Connect `VDD` of both sensors to **+3.3V** and `GND` to common **GND**.
 * Connect the **`AD0`** pin of the MPU6050 to **GND** (sets hardware I2C address to `0x68`). The `INT` pin is left unconnected as data is acquired via polling.
 
-#### 2. GPS Module PA6H (USART2)
-* Connect GPS **`TX`** to MCU **`PA3`** (`D0` / RX2).
-* Connect GPS **`RX`** to MCU **`PA2`** (`D1` / TX2).
-* Power the GPS module via **+3.3V** (or +5V) and **GND**.
+#### 2. GPS Module PA6H (USART1)
+* Connect GPS **`TX`** to MCU **`PB7`** (`D0` / USART1 RX).
+* Connect GPS **`RX`** to MCU **`PB6`** (`D1` / USART1 TX). This wire is optional while the node only receives NMEA data.
+* Power the GPS module via **+3.3V** (or +5V) and **GND** (common ground).
 
 #### 3. LDR Ambient Light Sensor Circuit (On-Demand Power)
 * Form a voltage divider using the LDR photoresistor and a **10 kOhm** fixed resistor in series.
@@ -66,5 +66,22 @@ The hardware system integrates five main sensor/actuator peripherals connected t
 * **Red Cathode:** Connect via a **220 Ohm** resistor to MCU pin **`PB3`** (`D3`).
 * **Green Cathode:** Connect via a **1.2 kOhm** resistor (attenuates green brightness for proper yellow color mixing) to MCU pin **`PC2`** (`D8`).
 * **Blue Cathode:** Connect via a **220 Ohm** resistor to MCU pin **`PA4`** (`D10`).
+
+---
+
+### 2.3 Design decision: GPS UART (USART1 on PB6/PB7)
+
+The GPS is connected to Arduino header pins D0/D1. On the NUCLEO-WL55JC these
+pins are routed by default to PB7/PB6 (USART1), while PA2/PA3 (LPUART1) are
+routed to the ST-LINK virtual COM port used for the console. The pin routing
+on the board is fixed by solder bridges; the devicetree `pinctrl` only selects
+which peripheral function the MCU pin performs.
+
+An earlier version of this document assigned the GPS to USART2 on PA2/PA3,
+reading D0/D1 as PA3/PA2. That mapping is the optional (non-default) board
+configuration. Evidence collected:
+
+* USART2 on PA2/PA3: the test application received no NMEA lines.
+* USART1 on PB6/PB7: NMEA sentences received at 9600 bps.
 
 ---
