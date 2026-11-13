@@ -1,6 +1,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
-#include "led.h"
+#include "led_service.h"
 
 #define RED_LED_NODE DT_ALIAS(led_red)
 #define GREEN_LED_NODE DT_ALIAS(led_green)
