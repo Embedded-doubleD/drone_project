@@ -436,3 +436,6 @@ FodyWeavers.xsd
 
 # Mac Files
 .DS_Store
+# Host test binaries
+tests/*_host/t
+tests/*_host/test_*[!c]
