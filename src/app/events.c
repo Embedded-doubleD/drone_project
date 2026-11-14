@@ -22,7 +22,7 @@ int events_send(const event_t *event) {
      * be called from contexts that must not block, such as an ISR.
      */
     if (k_msgq_put(&event_queue, event, K_NO_WAIT) != 0) {
-        printk("events: queue full, event %d dropped\n", event->type);
+        //printk("events: queue full, event %d dropped\n", event->type);
         return -ENOMSG;
     }
     return 0;

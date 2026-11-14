@@ -10,6 +10,7 @@ typedef enum {
     LED_COLOR_GREEN,
     LED_COLOR_BLUE,
     LED_COLOR_YELLOW,
+    LED_COLOR_MAGENTA,
 } led_color_t;
 
 /* Checks the RGB GPIOs and initially configures them as off outputs. */

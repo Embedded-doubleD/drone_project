@@ -1,129 +1,93 @@
 #include <zephyr/kernel.h>
-#include <zephyr/sys/printk.h>
-#include "events.h"
-#include "ldr_service.h"
-#include "led_service.h"
+#include <zephyr/sys/atomic.h>
 #include "fsm.h"
+#include "events.h"
+#include "led_service.h"
+#include "output_service.h"
+#include "telemetry_data.h"
 
-#define FSM_STACK_SIZE 1024
-#define FSM_PRIORITY 5
+#define FSM_STACK_SIZE   1024   /* PROVISIONAL: medir el uso real en la placa */
+#define FSM_PRIORITY     5      /* PROVISIONAL */
+#define DEBOUNCE_MS      0      /* ignora rebotes del pulsador (lo gestiona la placa en nuestro caso) */
+#define LED_REFRESH_MS   500    /* en NORMAL, refresca el color con el estado del tracker */
 
-/* State read and modified exclusively by the FSM thread. */
-static fsm_mode_t mode = FSM_MODE_NORMAL;
-/* Last valid sample; used to restore the color when returning to NORMAL. */
-static uint16_t last_adc_raw = 0;
+/* El modo lo escribe solo este hilo y lo leen otros: atomic evita lecturas a medias */
+static atomic_t mode = ATOMIC_INIT(FSM_MODE_TEST);   /* el sistema arranca en TEST */
 
-fsm_mode_t fsm_get_mode(void) {
-    return mode;
+fsm_mode_t fsm_get_mode(void)
+{
+    return (fsm_mode_t)atomic_get(&mode);
 }
 
-static led_color_t color_from_raw(uint16_t raw) {
-    /*
-     * Compare the reading without first converting it to an integer percentage,
-     * so the 33% and 66% thresholds do not depend on division truncation.
-     */
-    uint32_t scaled = (uint32_t)raw * 100U;
-
-    if (scaled < 33U * ADC_FULL_SCALE) {
-        return LED_COLOR_RED;
-    }
-    if (scaled <= 66U * ADC_FULL_SCALE) {
-        return LED_COLOR_YELLOW;
-    }
-    return LED_COLOR_GREEN;
-}
-
-static void enter_mode (fsm_mode_t new_mode) {
-    /* Update the state before applying the actions associated with the mode. */
-    mode = new_mode;
-
-    switch (mode) {
-        case FSM_MODE_NORMAL:
-            printk("Mode: NORMAL\n");
-            /* In NORMAL, resume measurements and display the last color. */
-            ldr_service_resume();
-            led_set_color(color_from_raw(last_adc_raw));
-            break;
-
-        case FSM_MODE_BLUE:
-            printk("Mode: BLUE\n");
-            /* The fixed blue color distinguishes this mode; measurements are unnecessary. */
-            ldr_service_suspend();
-            led_set_color(LED_COLOR_BLUE);
-            break;
-
-        case FSM_MODE_OFF:
-            printk("System OFF\n");
-            /* OFF turns off the output and stops periodic LDR sampling. */
-            ldr_service_suspend();
-            led_set_color(LED_COLOR_OFF);
-            break;
+static led_color_t color_for_state(tracker_state_t st)
+{
+    switch (st) {                      /* NORMAL: verde IDLE, amarillo FLYING, rojo PROBLEM */
+    case TRACKER_FLYING:  return LED_COLOR_YELLOW;
+    case TRACKER_PROBLEM: return LED_COLOR_RED;
+    case TRACKER_IDLE:
+    default:              return LED_COLOR_GREEN;
     }
 }
 
-static void handle_event (const event_t *event) {
-    switch (event->type) {
-        case EVENT_BUTTON_SHORT_PRESS:
-            /*
-             * A short press toggles between NORMAL and BLUE. From OFF, it
-             * explicitly returns to NORMAL, as defined by the behavior.
-             */
-            if (mode == FSM_MODE_NORMAL) {
-                enter_mode(FSM_MODE_BLUE);
-            } else {
-                enter_mode(FSM_MODE_NORMAL);
-            }
-            break;
+static led_color_t color_for(fsm_mode_t m)
+{
+    telemetry_t t;
 
-        case EVENT_BUTTON_LONG_PRESS:
-            /* A long press enters OFF; in OFF, it causes no further transition. */
-            if (mode != FSM_MODE_OFF) {
-                enter_mode(FSM_MODE_OFF);
-            }
-            break;
+    if (m == FSM_MODE_TEST) {
+        return LED_COLOR_BLUE;         /* TEST = azul */
+    }
+    if (m == FSM_MODE_SIMU) {
+        return LED_COLOR_MAGENTA;      /* SIMU = magenta, independiente del estado */
+    }
+    telemetry_get(&t);
+    return color_for_state(t.state);
+}
 
-        case EVENT_ADC_READING:
-            /*
-             * Samples are accepted for the interface only in NORMAL.
-             * In other modes, the FSM ignores them and leaves the stored color unchanged.
-             */
-            if (mode == FSM_MODE_NORMAL) {
-                last_adc_raw = event->adc_raw;
-                printk("ADC raw: %u, brightness: %u%%\n",
-                       event->adc_raw, event->brightness_pct);
-                led_set_color(color_from_raw(event->adc_raw));
-            }
-            break;
-
-        default:
-            break;
+static fsm_mode_t next_mode(fsm_mode_t m)
+{
+    switch (m) {
+    case FSM_MODE_TEST:   return FSM_MODE_NORMAL;
+    case FSM_MODE_NORMAL: return FSM_MODE_SIMU;
+    case FSM_MODE_SIMU:
+    default:              return FSM_MODE_TEST;   /* ciclo TEST -> NORMAL -> SIMU -> TEST */
     }
 }
 
-static void fsm_thread(void *p1, void *p2, void *p3) {
+static void enter_mode(fsm_mode_t m)
+{
+    atomic_set(&mode, m);
+    output_service_set_mode(m);     /* cambia la cadencia y el tipo de salida */
+    led_set_color(color_for(m));
+}
+
+static void fsm_thread(void *p1, void *p2, void *p3)
+{
     event_t event;
+    int64_t last_press = 0;
 
     ARG_UNUSED(p1);
     ARG_UNUSED(p2);
     ARG_UNUSED(p3);
 
-    /* The FSM initializes the LED hardware before announcing its first state. */
     if (led_init() != 0) {
-        printk("Error: LED init failed\n");
-        return;
+        return;                      /* sin LED no se puede continuar; sin texto para no ensuciar la salida */
     }
-    enter_mode(FSM_MODE_NORMAL);
+    enter_mode(FSM_MODE_TEST);
 
-    /*
-     * The queue decouples this logic from the producer services. K_FOREVER
-     * avoids polling: the thread blocks until it receives a message.
-     */
     while (1) {
-        if (events_receive(&event, K_FOREVER) == 0) {
-            handle_event(&event);
+        int ret = events_receive(&event, K_MSEC(LED_REFRESH_MS));
+
+        if (ret == 0 && event.type == EVENT_BUTTON_SHORT_PRESS) {
+            int64_t now = k_uptime_get();
+            if (now - last_press >= DEBOUNCE_MS) {
+                last_press = now;
+                enter_mode(next_mode(fsm_get_mode()));
+            }
+        } else if (fsm_get_mode() == FSM_MODE_NORMAL) {
+            led_set_color(color_for(FSM_MODE_NORMAL));   /* sigue el estado IDLE/FLYING/PROBLEM */
         }
+        /* Otros eventos (lecturas ADC, pulsacion larga) no cambian el modo */
     }
 }
 
-/* State machine thread: 1024-byte stack and priority 5 in Zephyr. */
 K_THREAD_DEFINE(fsm_tid, FSM_STACK_SIZE, fsm_thread, NULL, NULL, NULL, FSM_PRIORITY, 0, 0);
