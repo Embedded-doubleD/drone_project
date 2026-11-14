@@ -1,11 +1,11 @@
 #ifndef FSM_H
 #define FSM_H
 
-/* Operating modes that control the LED and sensor acquisition. */
+/* Modos de operación */
 typedef enum {
-    FSM_MODE_NORMAL = 0,
-    FSM_MODE_BLUE,
-    FSM_MODE_OFF,
+    FSM_MODE_TEST = 0,
+    FSM_MODE_NORMAL,
+    FSM_MODE_SIMU,
 } fsm_mode_t;
 
 /* Returns the current state machine mode. */

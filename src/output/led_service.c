@@ -75,6 +75,11 @@ int led_set_color(led_color_t color) {
             green = 1;
             blue = 0;
             break;
+        case LED_COLOR_MAGENTA:
+            red = 1;
+            green = 0;
+            blue = 1;
+            break;
         default:
             printk("Invalid LED color\n");
             return -EINVAL;

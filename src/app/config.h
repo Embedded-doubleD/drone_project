@@ -4,7 +4,7 @@
 /* Fijados por el enunciado */
 #define SIMU_PERIOD_MS        100     /* 10 Hz */
 #define TEST_PERIOD_MS        2000
-#define NORMAL_REPORT_MS      5000
+#define NORMAL_PERIOD_MS      5000
 #define STATS_WINDOW_S        30
 #define SIMU_BAUDRATE         115200
 
@@ -16,5 +16,6 @@
 /* LDR: se rellenan al calibrar (paso posterior) */
 #define LDR_RAW_DARK          0       /* PENDIENTE: medir en oscuridad */
 #define LDR_RAW_BRIGHT        4095    /* PENDIENTE: medir con luz maxima */
+#define LDR_CALIBRATED        0       /* 1 = calibrado, 0 = pendiente de calibrar */
 
 #endif /* CONFIG_H */

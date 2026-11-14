@@ -35,6 +35,36 @@ void telemetry_set_gps(uint8_t fix, uint8_t sats,
     k_mutex_unlock(&telemetry_lock);
 }
 
+void telemetry_set_gps_time(uint32_t hhmmss)
+{
+    k_mutex_lock(&telemetry_lock, K_FOREVER);
+    data.gps_utc_hhmmss = hhmmss;
+    k_mutex_unlock(&telemetry_lock);
+}
+
+void telemetry_set_imu(int32_t ax_cms2, int32_t ay_cms2, int32_t az_cms2,
+                       int32_t gx_ddegs, int32_t gy_ddegs, int32_t gz_ddegs)
+{
+    k_mutex_lock(&telemetry_lock, K_FOREVER);
+    data.ax_cms2 = ax_cms2;
+    data.ay_cms2 = ay_cms2;
+    data.az_cms2 = az_cms2;
+    data.gx_ddegs = gx_ddegs;
+    data.gy_ddegs = gy_ddegs;
+    data.gz_ddegs = gz_ddegs;
+    data.flags &= ~FLAG_IMU_INVALID;
+    k_mutex_unlock(&telemetry_lock);
+}
+
+void telemetry_set_attitude(int32_t roll_cdeg, int32_t pitch_cdeg, int32_t yaw_cdeg)
+{
+    k_mutex_lock(&telemetry_lock, K_FOREVER);
+    data.roll_cdeg = roll_cdeg;
+    data.pitch_cdeg = pitch_cdeg;
+    data.yaw_cdeg = yaw_cdeg;
+    k_mutex_unlock(&telemetry_lock);
+}
+
 void telemetry_set_light(int32_t light_dpct)
 {
     k_mutex_lock(&telemetry_lock, K_FOREVER);

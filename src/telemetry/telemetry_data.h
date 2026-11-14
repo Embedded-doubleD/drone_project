@@ -26,6 +26,7 @@ typedef struct {
     int32_t  lat_e6;      /* grados * 1e6 */
     int32_t  lon_e6;
     int32_t  alt_dm;      /* metros * 10 */
+    uint32_t gps_utc_hhmmss; /* hhmmss UTC, 0 si no hay fix = desconocida */
     /* Posicion y velocidad locales */
     int32_t  x_cm, y_cm, z_cm;
     int32_t  vx_cms, vy_cms, vz_cms;
@@ -46,6 +47,10 @@ void telemetry_get(telemetry_t *out);
 
 void telemetry_set_gps(uint8_t fix, uint8_t sats,
                        int32_t lat_e6, int32_t lon_e6, int32_t alt_dm);
+void telemetry_set_gps_time(uint32_t hhmmss);
+void telemetry_set_imu(int32_t ax_cms2, int32_t ay_cms2, int32_t az_cms2,
+                       int32_t gx_ddegs, int32_t gy_ddegs, int32_t gz_ddegs);
+void telemetry_set_altitude(int32_t roll_cdeg, int32_t pitch_cdeg, int32_t yaw_cdeg);
 void telemetry_set_light(int32_t light_dpct);
 void telemetry_set_env(int32_t temp_dc, int32_t hum_dpct);
 void telemetry_set_state(tracker_state_t state);
