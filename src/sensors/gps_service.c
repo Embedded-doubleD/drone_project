@@ -47,9 +47,8 @@ static void gps_uart_cb(const struct device *dev, void *user_data)
 
     ARG_UNUSED(user_data);
 
-    if (!uart_irq_update(dev)) {
-        return;
-    }
+    /* Actualiza el estado de la interrupción antes de leer el FIFO */
+    uart_irq_update(dev);   /* en esta versión no devuelve valor */
 
     while (uart_irq_rx_ready(dev)) {
         if (uart_fifo_read(dev, &c, 1) <= 0) {
