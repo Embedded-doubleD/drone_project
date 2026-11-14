@@ -8,6 +8,8 @@
 #include "telemetry_report.h"
 #include "telemetry_data.h"
 #include "config.h"
+// Temporal
+#include "gps_service.h"
 
 #define OUT_STACK_SIZE    2048    /* PROVISIONAL: medir el uso real (buffers de 222 y 640 bytes) */
 #define OUT_PRIORITY      4       /* PROVISIONAL: más prioritario que los sensores */
@@ -74,6 +76,10 @@ static void out_thread(void *p1, void *p2, void *p3) {
             const char *name = (mode == FSM_MODE_TEST) ? "TEST" : "NORMAL";
             int n = report_format(report, sizeof report, name, &t);
             if (n > 0) {
+                gps_stats_t gs;
+                gps_service_get_stats(&gs);
+                printk("GPS stats: ok=%u bad=%u dropped=%u\n",
+                    (unsigned)gs.gga_ok, (unsigned)gs.lines_bad, (unsigned)gs.lines_dropped);
                 printk("%s", report);
             }
         }

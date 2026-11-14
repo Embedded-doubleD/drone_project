@@ -4,6 +4,10 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/sys/atomic.h>
 
+#ifdef CONFIG_PM
+#include <zephyr/pm/policy.h>
+#endif
+
 #include "gps_service.h"
 #include "nmea.h"
 #include "telemetry_data.h"
