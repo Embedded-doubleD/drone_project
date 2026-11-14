@@ -10,10 +10,14 @@ target_sources(app PRIVATE
     src/app/events.c
     src/app/fsm.c
     src/sensors/ldr_service.c
+    src/sensors/nmea.c
+    src/sensors/gps_service.c
     src/output/led_service.c
+    src/output/output_service.c
     src/input/button_service.c
     src/telemetry/telemetry_data.c
     src/telemetry/simu_frame.c
+    src/telemetry/telemetry_report.c
 )
 
 target_include_directories(app PRIVATE

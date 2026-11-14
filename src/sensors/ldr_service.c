@@ -1,9 +1,12 @@
-#include "ldr_service.h"
-#include "events.h"
+
 #include <zephyr/drivers/adc.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/atomic.h>
+#include "ldr_service.h"
+#include "events.h"
+#include "telemetry_data.h"
+#include "config.h"
 
 #ifdef CONFIG_PM
 #include <zephyr/pm/policy.h>
@@ -51,14 +54,23 @@ K_THREAD_DEFINE(ldr_thread_id, LDR_THREAD_STACK_SIZE,
 void ldr_service_suspend(void) {
     /* The thread will check the flag at the next safe point in its loop. */
     atomic_set(&acquisition_enabled, 0);
-    printk("LDR acquisition suspended\n");
+    //printk("LDR acquisition suspended\n");
 }
 
 void ldr_service_resume(void) {
     /* Re-enables readings and wakes the thread if it was waiting on the semaphore. */
     atomic_set(&acquisition_enabled, 1);
     k_sem_give(&resume_sem);
-    printk("LDR acquisition resumed\n");
+    //printk("LDR acquisition resumed\n");
+}
+
+static int32_t ldr_raw_to_dpct(uint16_t raw) {
+    int32_t span = (int32_t)LDR_RAW_BRIGHT - (int32_t)LDR_RAW_DARK;
+    if (span <= 0) { return 0; }
+    int32_t v = (((int32_t)raw - (int32_t)LDR_RAW_DARK) * 1000) / span;
+    if (v < 0) { v = 0; }
+    if (v > 1000) { v = 1000; }
+    return v; /* porcentaje * 10 */
 }
 
 static int ldr_acquire(event_t *event, struct adc_sequence *seq) {
@@ -77,6 +89,7 @@ static int ldr_acquire(event_t *event, struct adc_sequence *seq) {
     LDR_PM_UNLOCK();
 
     if (ret != 0) {
+        telemetry_flag_set(FLAG_LDR_INVALID);
         return ret;
     }
 
@@ -89,6 +102,13 @@ static int ldr_acquire(event_t *event, struct adc_sequence *seq) {
     event->type = EVENT_ADC_READING;
     event->adc_raw = (uint16_t)value;
     event->brightness_pct = (uint8_t)MIN((value * 100) / ADC_FULL_SCALE, 100);
+    telemetry_set_light(ldr_raw_to_dpct(event->adc_raw));
+    if (event->adc_raw < LDR_RAW_DARK || event->adc_raw > LDR_RAW_BRIGHT) {
+    telemetry_flag_set(FLAG_LDR_INVALID); /* fuera del rango calibrado */
+    }
+    #if LDR_CALIBRATED
+    telemetry_flag_clear(FLAG_CAL_PENDING);
+    #endif
     return 0;
 }
 
@@ -150,7 +170,8 @@ void ldr_thread_entry(void *p1, void *p2, void *p3) {
         if (ldr_acquire(&event, &sequence) == 0) {
             events_send(&event);
         } else {
-            printk("Error:ADC read failed\n");
+            //printk("Error:ADC read failed\n");
+            telemetry_flag_set(FLAG_LDR_INVALID);
         }
 
         next_wakeup += LDR_PERIOD_MS;
