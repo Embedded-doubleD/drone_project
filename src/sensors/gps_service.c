@@ -111,6 +111,11 @@ static void gps_thread(void *p1, void *p2, void *p3)
         return;
     }
 
+    #ifdef CONFIG_PM
+        /* El GPS transmite sin parar y USART1 deja de recibir en STOP: se prohiben esos estados. */
+        pm_policy_state_lock_get(PM_STATE_SUSPEND_TO_IDLE, PM_ALL_SUBSTATES);
+    #endif
+
     uart_irq_callback_user_data_set(gps_dev, gps_uart_cb, NULL);
     uart_irq_rx_enable(gps_dev);
 
