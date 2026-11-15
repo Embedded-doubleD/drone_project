@@ -1,5 +1,7 @@
 
-#include "imu.h"
+#include "imu_service.h"
+#include "telemetry_data.h"
+#include "config.h"
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -30,6 +32,11 @@
 #define MPU6050_GYRO_SENSITIVITY   131.0f
 
 #define GRAVITY                    9.80665f
+
+/* MPU6050 thread configuration */
+#define IMU_STACK_SIZE 1024
+#define IMU_PRIORITY   6
+#define IMU_PERIOD_MS 20
 
 #define I2C_NODE DT_ALIAS(i2c_bus)
 
@@ -249,3 +256,52 @@ int imu_read(imu_data_t *data)
 
     return 0;
 }
+
+static void imu_thread(void *p1, void *p2, void *p3)
+{
+    ARG_UNUSED(p1);
+    ARG_UNUSED(p2);
+    ARG_UNUSED(p3);
+
+    imu_data_t imu;
+
+    /* Retry initialization until the sensor is available. */
+    while (imu_init() < 0) {
+        telemetry_flag_set(FLAG_IMU_INVALID);
+        k_msleep(1000);
+    }
+
+    printk("MPU6050 initialized successfully\n");
+
+    while (1) {
+        if (imu_read(&imu) == 0) {
+
+            /* Convert physical values to telemetry integer scales. */
+            telemetry_set_imu(
+                (int32_t)(imu.accel_x * 100.0f),
+                (int32_t)(imu.accel_y * 100.0f),
+                (int32_t)(imu.accel_z * 100.0f),
+
+                (int32_t)(imu.gyro_x * 10.0f),
+                (int32_t)(imu.gyro_y * 10.0f),
+                (int32_t)(imu.gyro_z * 10.0f)
+            );
+
+        } else {
+            telemetry_flag_set(FLAG_IMU_INVALID);
+        }
+
+        k_msleep(IMU_PERIOD_MS);
+    }
+}
+
+K_THREAD_DEFINE(
+    imu_thread_id,
+    IMU_STACK_SIZE,
+    imu_thread,
+    NULL, NULL, NULL,
+    IMU_PRIORITY,
+    0,
+    0
+);
+
