@@ -29,7 +29,7 @@ The hardware system integrates five main sensor/actuator peripherals connected t
 | **I2C1 Bus** | Serial Clock (`scl`) | **`PA9`** | **`D9`** (CN5 Pin 10) | Shared I2C Clock Bus (100 kHz) | `&i2c1` / `i2c-bus` |
 | | Serial Data (`sda`) | **`PA10`** | **`A2`** (CN8 Pin 3) | Shared I2C Data Bus (100 kHz) | `&i2c1` / `i2c-bus` |
 | **MPU6050 IMU** | I2C Address Select | `GND` | - | Tied to GND (Fixes I2C Address `0x68`) | `mpu6050@68` |
-| | Interrupt Signal | `PA6` | `D12` | *Unused / Disconnected* (Polled via I2C) | - |
+| | **MPU6050 IMU** | Interrupt Signal (`INT`) | `PA6` | `D12` (CN5 Pin 5) | GPIO input, active-high interrupt | `mpu6050` / `int-gpios` |
 | **Si7021 Sensor** | Temp & Humidity | - | - | Connected to shared I2C Bus (`0x40`) | `si7021@40` |
 | **Ultimate GPS PA6H** | MCU RX <- GPS TX | **`PB7`** | **`D0`** (CN9 Pin 1) | USART1 RX (9600 bps NMEA) | `&usart1` / `gps` |
 | | MCU TX -> GPS RX | **`PB6`** | **`D1`** (CN9 Pin 2) | USART1 TX (9600 bps). Optional: only needed to send commands to the module | `&usart1` / `gps` |
@@ -48,7 +48,8 @@ The hardware system integrates five main sensor/actuator peripherals connected t
 * Connect MCU **`PA9`** (`D9`) to the breadboard **SCL rail**. Connect SCL of both MPU6050 and Si7021 to this rail.
 * Connect MCU **`PA10`** (`A2`) to the breadboard **SDA rail**. Connect SDA of both MPU6050 and Si7021 to this rail.
 * Connect `VDD` of both sensors to **+3.3V** and `GND` to common **GND**.
-* Connect the **`AD0`** pin of the MPU6050 to **GND** (sets hardware I2C address to `0x68`). The `INT` pin is left unconnected as data is acquired via polling.
+* Connect the **`AD0`** pin of the MPU6050 to **GND** (sets hardware I2C address to `0x68`). 
+* Connect the MPU6050 INT pin to the NUCLEO-WL55JC PA6 (Arduino D12, CN5 pin 5). This signal will be used for Data Ready interrupt synchronization.
 
 #### 2. GPS Module PA6H (USART1)
 * Connect GPS **`TX`** to MCU **`PB7`** (`D0` / USART1 RX).

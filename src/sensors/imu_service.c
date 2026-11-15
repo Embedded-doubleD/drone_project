@@ -1,262 +1,81 @@
 
-#include "imu_service.h"
-#include "telemetry_data.h"
-#include "config.h"
-
+#include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/i2c.h>
-#include <zephyr/kernel.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/sys/util.h>
 
 #include <errno.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
 
-/* MPU6050 I2C configuration */
-#define MPU6050_I2C_ADDR          0x68
+#include "imu.h"
+#include "telemetry_data.h"
 
-/* MPU6050 registers */
-#define MPU6050_REG_SMPLRT_DIV     0x19
-#define MPU6050_REG_CONFIG         0x1A
-#define MPU6050_REG_GYRO_CONFIG    0x1B
-#define MPU6050_REG_ACCEL_CONFIG   0x1C
-#define MPU6050_REG_ACCEL_XOUT_H   0x3B
-#define MPU6050_REG_PWR_MGMT_1     0x6B
-#define MPU6050_REG_WHO_AM_I       0x75
+/* MPU6050 interrupt GPIO */
+#define IMU_INT_PIN 6
 
-#define MPU6050_WHO_AM_I_VALUE     0x68
+#define IMU_STACK_SIZE  1024
+#define IMU_PRIORITY    6
 
-/* Sensor sensitivities */
-#define MPU6050_ACCEL_SENSITIVITY  16384.0f
-#define MPU6050_GYRO_SENSITIVITY   131.0f
+static struct gpio_callback imu_int_callback;
 
-#define GRAVITY                    9.80665f
+static const struct device *imu_gpio_port =
+    DEVICE_DT_GET(DT_NODELABEL(gpioa));
 
-/* MPU6050 thread configuration */
-#define IMU_STACK_SIZE 1024
-#define IMU_PRIORITY   6
-#define IMU_PERIOD_MS 20
-
-#define I2C_NODE DT_ALIAS(i2c_bus)
-
-static bool is_imu_initialized = false;
-
-
-/* I2C device */
-static const struct device *i2c_dev;
+/* One pending event is enough: we only need the latest sample. */
+K_SEM_DEFINE(imu_data_ready_sem, 0, 1);
 
 /*
- * Converts two bytes (MSB and LSB) into a signed 16-bit value.
+ * GPIO interrupt handler.
+ * Keep the ISR short: do not perform I2C operations here.
  */
-static int16_t imu_get_int16(uint8_t msb, uint8_t lsb)
+static void imu_gpio_isr(const struct device *port,
+                         struct gpio_callback *cb,
+                         gpio_port_pins_t pins)
 {
-    uint16_t value = ((uint16_t)msb << 8) | (uint16_t)lsb;
+    ARG_UNUSED(port);
+    ARG_UNUSED(cb);
+    ARG_UNUSED(pins);
 
-    return (int16_t)value;
+    k_sem_give(&imu_data_ready_sem);
 }
 
 /*
- * Writes a register in the MPU6050.
+ * Configure the MCU GPIO interrupt.
  */
-static int imu_write_register(uint8_t reg, uint8_t value)
-{
-    uint8_t data[2] = { reg, value };
-
-    return i2c_write(i2c_dev,
-                     data,
-                     sizeof(data),
-                     MPU6050_I2C_ADDR);
-}
-
-/*
- * Reads the MPU6050 identity register.
- */
-static int imu_check_id(void)
-{
-    uint8_t reg = MPU6050_REG_WHO_AM_I;
-    uint8_t id;
-
-    int ret = i2c_write_read(i2c_dev,
-                             MPU6050_I2C_ADDR,
-                             &reg,
-                             sizeof(reg),
-                             &id,
-                             sizeof(id));
-
-    if (ret < 0) {
-        return ret;
-    }
-
-    if (id != MPU6050_WHO_AM_I_VALUE) {
-        return -ENODEV;
-    }
-
-    return 0;
-}
-
-/*
- * Initializes the MPU6050.
- */
-int imu_init(void)
+static int imu_gpio_interrupt_init(void)
 {
     int ret;
 
-    is_imu_initialized = false;
-
-    /* Get the I2C bus from DeviceTree */
-    i2c_dev = DEVICE_DT_GET(I2C_NODE);
-
-    if (!device_is_ready(i2c_dev)) {
-        i2c_dev = NULL;
+    if (!device_is_ready(imu_gpio_port)) {
         return -ENODEV;
     }
 
-    /* Check sensor identity */
-    ret = imu_check_id();
+    ret = gpio_pin_configure(imu_gpio_port,
+                             IMU_INT_PIN,
+                             GPIO_INPUT);
 
     if (ret < 0) {
         return ret;
     }
 
-    /* Wake up the sensor */
-    ret = imu_write_register(MPU6050_REG_PWR_MGMT_1, 0x00);
+    gpio_init_callback(&imu_int_callback,
+                       imu_gpio_isr,
+                       BIT(IMU_INT_PIN));
+
+    ret = gpio_add_callback(imu_gpio_port,
+                            &imu_int_callback);
 
     if (ret < 0) {
         return ret;
     }
-
-    k_msleep(50);
-
-    /* Sample rate divider: 1 kHz / (1 + 9) = 100 Hz */
-    ret = imu_write_register(MPU6050_REG_SMPLRT_DIV, 0x09);
-
-    if (ret < 0) {
-        return ret;
-    }
-
-    /* Digital low-pass filter */
-    ret = imu_write_register(MPU6050_REG_CONFIG, 0x03);
-
-    if (ret < 0) {
-        return ret;
-    }
-
-    /* Gyroscope range: +/- 250 degrees/second */
-    ret = imu_write_register(MPU6050_REG_GYRO_CONFIG, 0x00);
-
-    if (ret < 0) {
-        return ret;
-    }
-
-    /* Accelerometer range: +/- 2g */
-    ret = imu_write_register(MPU6050_REG_ACCEL_CONFIG, 0x00);
-
-    if (ret < 0) {
-        return ret;
-    }
-
-    k_msleep(50);
-
-
-    is_imu_initialized = true;
-    return 0;
-}
-
-/*
- * Reads raw accelerometer and gyroscope measurements.
- *
- * A single 14-byte read obtains:
- * - 6 bytes of accelerometer data
- * - 2 bytes of temperature data (not used)
- * - 6 bytes of gyroscope data
- */
-int imu_read_raw(imu_raw_data_t *data)
-{
-    uint8_t reg = MPU6050_REG_ACCEL_XOUT_H;
-    uint8_t buffer[14];
-
-    int ret;
-
-    if (data == NULL) {
-        return -EINVAL;
-    }
-
-    if (i2c_dev == NULL || !device_is_ready(i2c_dev) || !is_imu_initialized) {
-        return -ENODEV;
-    }
-
-    ret = i2c_write_read(i2c_dev,
-                         MPU6050_I2C_ADDR,
-                         &reg,
-                         sizeof(reg),
-                         buffer,
-                         sizeof(buffer));
-
-    if (ret < 0) {
-        return ret;
-    }
-
-    /* Accelerometer */
-    data->accel_x = imu_get_int16(buffer[0], buffer[1]);
-    data->accel_y = imu_get_int16(buffer[2], buffer[3]);
-    data->accel_z = imu_get_int16(buffer[4], buffer[5]);
-
-    /* Bytes 6 and 7 contain the temperature measurement */
-
-    /* Gyroscope */
-    data->gyro_x = imu_get_int16(buffer[8], buffer[9]);
-    data->gyro_y = imu_get_int16(buffer[10], buffer[11]);
-    data->gyro_z = imu_get_int16(buffer[12], buffer[13]);
 
     return 0;
 }
 
 /*
- * Reads measurements and converts them into physical units.
- *
- * Accelerometer: m/s^2
- * Gyroscope: degrees/second
+ * IMU acquisition thread.
+ * Sleeps until the MPU6050 signals Data Ready.
  */
-int imu_read(imu_data_t *data)
-{
-    imu_raw_data_t raw;
-
-    int ret;
-
-    if (data == NULL) {
-        return -EINVAL;
-    }
-
-    ret = imu_read_raw(&raw);
-
-    if (ret < 0) {
-        return ret;
-    }
-
-    /* Convert accelerometer values to m/s^2 */
-    data->accel_x =
-        ((float)raw.accel_x / MPU6050_ACCEL_SENSITIVITY) * GRAVITY;
-
-    data->accel_y =
-        ((float)raw.accel_y / MPU6050_ACCEL_SENSITIVITY) * GRAVITY;
-
-    data->accel_z =
-        ((float)raw.accel_z / MPU6050_ACCEL_SENSITIVITY) * GRAVITY;
-
-    /* Convert gyroscope values to degrees/second */
-    data->gyro_x =
-        (float)raw.gyro_x / MPU6050_GYRO_SENSITIVITY;
-
-    data->gyro_y =
-        (float)raw.gyro_y / MPU6050_GYRO_SENSITIVITY;
-
-    data->gyro_z =
-        (float)raw.gyro_z / MPU6050_GYRO_SENSITIVITY;
-
-    return 0;
-}
-
 static void imu_thread(void *p1, void *p2, void *p3)
 {
     ARG_UNUSED(p1);
@@ -264,19 +83,50 @@ static void imu_thread(void *p1, void *p2, void *p3)
     ARG_UNUSED(p3);
 
     imu_data_t imu;
+    int ret;
 
-    /* Retry initialization until the sensor is available. */
-    while (imu_init() < 0) {
+    /* Initialize GPIO first, while sensor interrupts are disabled. */
+    ret = imu_gpio_interrupt_init();
+
+    if (ret < 0) {
+        telemetry_flag_set(FLAG_IMU_INVALID);
+        return;
+    }
+
+    /* Initialize MPU6050 */
+    while ((ret = imu_init()) < 0) {
         telemetry_flag_set(FLAG_IMU_INVALID);
         k_msleep(1000);
     }
 
-    printk("MPU6050 initialized successfully\n");
+    /* Enable sensor interrupt */
+    ret = imu_enable_data_ready_interrupt();
+
+    if (ret < 0) {
+        telemetry_flag_set(FLAG_IMU_INVALID);
+        return;
+    }
+
+    /* Enable MCU interrupt */
+    ret = gpio_pin_interrupt_configure(
+        imu_gpio_port,
+        IMU_INT_PIN,
+        GPIO_INT_EDGE_RISING
+    );
+
+    if (ret < 0) {
+        return;
+    }
 
     while (1) {
-        if (imu_read(&imu) == 0) {
 
-            /* Convert physical values to telemetry integer scales. */
+        /* Block until the GPIO ISR gives the semaphore. */
+        k_sem_take(&imu_data_ready_sem, K_FOREVER);
+
+        ret = imu_read(&imu);
+
+        if (ret == 0) {
+
             telemetry_set_imu(
                 (int32_t)(imu.accel_x * 100.0f),
                 (int32_t)(imu.accel_y * 100.0f),
@@ -290,8 +140,6 @@ static void imu_thread(void *p1, void *p2, void *p3)
         } else {
             telemetry_flag_set(FLAG_IMU_INVALID);
         }
-
-        k_msleep(IMU_PERIOD_MS);
     }
 }
 
@@ -304,4 +152,3 @@ K_THREAD_DEFINE(
     0,
     0
 );
-

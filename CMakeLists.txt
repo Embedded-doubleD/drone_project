@@ -19,6 +19,7 @@ target_sources(app PRIVATE
     src/telemetry/simu_frame.c
     src/telemetry/telemetry_report.c
     src/sensors/imu_service.c
+    src/sensors/imu.c
     src/sensors/temp_hum.c
 )
 
