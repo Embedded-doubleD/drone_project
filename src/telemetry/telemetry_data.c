@@ -56,7 +56,7 @@ void telemetry_set_imu(int32_t ax_cms2, int32_t ay_cms2, int32_t az_cms2,
     k_mutex_unlock(&telemetry_lock);
 }
 
-void telemetry_set_attitude(int32_t roll_cdeg, int32_t pitch_cdeg, int32_t yaw_cdeg)
+void telemetry_set_altitude(int32_t roll_cdeg, int32_t pitch_cdeg, int32_t yaw_cdeg)
 {
     k_mutex_lock(&telemetry_lock, K_FOREVER);
     data.roll_cdeg = roll_cdeg;
