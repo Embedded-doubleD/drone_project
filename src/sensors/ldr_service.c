@@ -101,13 +101,15 @@ static int ldr_acquire(event_t *event, struct adc_sequence *seq) {
 
     event->type = EVENT_ADC_READING;
     event->adc_raw = (uint16_t)value;
+    /* TEMPORAL: muestreo de medidas raw para calibrar el ldr en config.h */
+    //printk("LDR raw=%u\n", (unsigned)event->adc_raw);
     event->brightness_pct = (uint8_t)MIN((value * 100) / ADC_FULL_SCALE, 100);
     telemetry_set_light(ldr_raw_to_dpct(event->adc_raw));
     if (event->adc_raw < LDR_RAW_DARK || event->adc_raw > LDR_RAW_BRIGHT) {
     telemetry_flag_set(FLAG_LDR_INVALID); /* fuera del rango calibrado */
     }
     #if LDR_CALIBRATED
-    telemetry_flag_clear(FLAG_CAL_PENDING);
+        telemetry_flag_clear(FLAG_CAL_PENDING);
     #endif
     return 0;
 }

@@ -14,8 +14,8 @@
 #define ENV_PERIOD_MS         2000    /* sugerido: 2-5 s */
 
 /* LDR: se rellenan al calibrar (paso posterior) */
-#define LDR_RAW_DARK          1160    /* PENDIENTE: medir en oscuridad */
-#define LDR_RAW_BRIGHT        4095    /* PENDIENTE: medir con luz maxima */
+#define LDR_RAW_DARK          1800    /* PENDIENTE: medir en oscuridad */
+#define LDR_RAW_BRIGHT        4000    /* PENDIENTE: medir con luz maxima */
 #define LDR_CALIBRATED        1       /* 1 = calibrado, 0 = pendiente de calibrar */
 
 #endif /* CONFIG_H */
