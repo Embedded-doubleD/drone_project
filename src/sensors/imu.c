@@ -196,6 +196,26 @@ int imu_read_raw(imu_raw_data_t *data)
     );
 
     if (ret < 0) {
+        /*
+        * Try to clear the latched interrupt even if
+        * the measurement read failed.
+        */
+        uint8_t status_reg = MPU6050_REG_INT_STATUS;
+        uint8_t status;
+
+        int status_ret = i2c_write_read(
+            i2c_dev,
+            MPU6050_I2C_ADDR,
+            &status_reg,
+            sizeof(status_reg),
+            &status,
+            sizeof(status)
+        );
+
+        if (status_ret < 0) {
+            return ret;
+        }
+
         return ret;
     }
 
@@ -285,10 +305,9 @@ int imu_enable_data_ready_interrupt(void)
     /*
      * Active high
      * Push-pull
-     * Latched interrupt
      * Clear interrupt by reading INT_STATUS
      */
-    ret = imu_write_register(MPU6050_REG_INT_PIN_CFG, 0x20);
+    ret = imu_write_register(MPU6050_REG_INT_PIN_CFG, 0x00);
 
     if (ret < 0) {
         return ret;

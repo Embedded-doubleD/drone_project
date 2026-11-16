@@ -24,21 +24,22 @@ static const struct device *imu_gpio_port =
 /* One pending event is enough: we only need the latest sample. */
 K_SEM_DEFINE(imu_data_ready_sem, 0, 1);
 
+
 /*
  * GPIO interrupt handler.
  * Keep the ISR short: do not perform I2C operations here.
  */
-static void imu_gpio_isr(const struct device *port,
-                         struct gpio_callback *cb,
-                         gpio_port_pins_t pins)
+
+static void imu_gpio_isr(const struct device *dev,
+                              struct gpio_callback *cb,
+                              uint32_t pins)
 {
-    ARG_UNUSED(port);
+    ARG_UNUSED(dev);
     ARG_UNUSED(cb);
     ARG_UNUSED(pins);
 
     k_sem_give(&imu_data_ready_sem);
 }
-
 /*
  * Configure the MCU GPIO interrupt.
  */
@@ -99,15 +100,7 @@ static void imu_thread(void *p1, void *p2, void *p3)
         k_msleep(1000);
     }
 
-    /* Enable sensor interrupt */
-    ret = imu_enable_data_ready_interrupt();
-
-    if (ret < 0) {
-        telemetry_flag_set(FLAG_IMU_INVALID);
-        return;
-    }
-
-    /* Enable MCU interrupt */
+    /* First enable the MCU GPIO interrupt */
     ret = gpio_pin_interrupt_configure(
         imu_gpio_port,
         IMU_INT_PIN,
@@ -115,13 +108,27 @@ static void imu_thread(void *p1, void *p2, void *p3)
     );
 
     if (ret < 0) {
+        telemetry_flag_set(FLAG_IMU_INVALID);
+        return;
+    }
+
+    /* Then enable Data Ready interrupt on the MPU6050 */
+    ret = imu_enable_data_ready_interrupt();
+
+    if (ret < 0) {
+        telemetry_flag_set(FLAG_IMU_INVALID);
         return;
     }
 
     while (1) {
 
         /* Block until the GPIO ISR gives the semaphore. */
-        k_sem_take(&imu_data_ready_sem, K_FOREVER);
+        ret = k_sem_take(&imu_data_ready_sem, K_FOREVER);
+
+        if (ret < 0) {
+            telemetry_flag_set(FLAG_IMU_INVALID);
+            continue;
+        }
 
         ret = imu_read(&imu);
 
