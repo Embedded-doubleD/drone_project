@@ -128,8 +128,8 @@ int imu_init(void)
 
     k_msleep(50);
 
-    /* Sample rate divider: 1 kHz / (1 + 9) = 100 Hz */
-    ret = imu_write_register(MPU6050_REG_SMPLRT_DIV, 0x09);
+    /* Sample rate divider: 50 Hz (1 kHz / (1 + 19)) */
+    ret = imu_write_register(MPU6050_REG_SMPLRT_DIV, 19);
 
     if (ret < 0) {
         return ret;
