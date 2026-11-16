@@ -7,7 +7,7 @@
 
 #include <errno.h>
 
-#include "imu.h"
+#include "imu_service.h"
 #include "telemetry_data.h"
 
 /* MPU6050 interrupt GPIO */
