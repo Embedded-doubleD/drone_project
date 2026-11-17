@@ -3,7 +3,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/printk.h>
 
-#define BUTTON_NODE DT_ALIAS(sw1)
+#define BUTTON_NODE DT_ALIAS(sw0)
 
 /* B2 specification obtained from the sw1 alias defined in the devicetree. */
 static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(BUTTON_NODE, gpios);
