@@ -20,7 +20,7 @@ target_sources(app PRIVATE
     src/telemetry/telemetry_report.c
     src/sensors/imu_service.c
     src/sensors/imu.c
-    src/sensors/temp_hum.c
+    src/sensors/temp_hum_service.c
 )
 
 target_include_directories(app PRIVATE
