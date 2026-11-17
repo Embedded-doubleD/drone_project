@@ -16,6 +16,11 @@
 #define IMU_STACK_SIZE  1024
 #define IMU_PRIORITY    6
 
+/* Gyroscope calibration */
+#define IMU_CALIBRATION_SAMPLES       200
+#define IMU_CALIBRATION_TIMEOUT_MS    500
+#define IMU_CALIBRATION_MAX_ERRORS    10
+
 static struct gpio_callback imu_int_callback;
 
 static const struct device *imu_gpio_port =
@@ -24,15 +29,18 @@ static const struct device *imu_gpio_port =
 /* One pending event is enough: we only need the latest sample. */
 K_SEM_DEFINE(imu_data_ready_sem, 0, 1);
 
+/* Gyroscope offsets in degrees/second */
+static float gyro_offset_x = 0.0f;
+static float gyro_offset_y = 0.0f;
+static float gyro_offset_z = 0.0f;
 
 /*
  * GPIO interrupt handler.
  * Keep the ISR short: do not perform I2C operations here.
  */
-
 static void imu_gpio_isr(const struct device *dev,
-                              struct gpio_callback *cb,
-                              uint32_t pins)
+                         struct gpio_callback *cb,
+                         uint32_t pins)
 {
     ARG_UNUSED(dev);
     ARG_UNUSED(cb);
@@ -40,6 +48,7 @@ static void imu_gpio_isr(const struct device *dev,
 
     k_sem_give(&imu_data_ready_sem);
 }
+
 /*
  * Configure the MCU GPIO interrupt.
  */
@@ -74,6 +83,62 @@ static int imu_gpio_interrupt_init(void)
 }
 
 /*
+ * Calibrate the gyroscope at startup.
+ *
+ * The board must remain completely still during calibration.
+ * Collects 200 valid samples and calculates the average
+ * gyroscope value for each axis.
+ *
+ * Offsets are stored in degrees/second.
+ */
+static int imu_calibrate_gyro(void)
+{
+    imu_data_t imu;
+
+    float sum_x = 0.0f;
+    float sum_y = 0.0f;
+    float sum_z = 0.0f;
+
+    int samples = 0;
+    int errors = 0;
+    int ret;
+
+    while (samples < IMU_CALIBRATION_SAMPLES) {
+
+        ret = k_sem_take(&imu_data_ready_sem,
+                         K_MSEC(IMU_CALIBRATION_TIMEOUT_MS));
+
+        if (ret != 0) {
+            return -ETIMEDOUT;
+        }
+
+        ret = imu_read(&imu);
+
+        if (ret < 0) {
+            errors++;
+
+            if (errors >= IMU_CALIBRATION_MAX_ERRORS) {
+                return ret;
+            }
+
+            continue;
+        }
+
+        sum_x += imu.gyro_x;
+        sum_y += imu.gyro_y;
+        sum_z += imu.gyro_z;
+
+        samples++;
+    }
+
+    gyro_offset_x = sum_x / (float)IMU_CALIBRATION_SAMPLES;
+    gyro_offset_y = sum_y / (float)IMU_CALIBRATION_SAMPLES;
+    gyro_offset_z = sum_z / (float)IMU_CALIBRATION_SAMPLES;
+
+    return 0;
+}
+
+/*
  * IMU acquisition thread.
  * Sleeps until the MPU6050 signals Data Ready.
  */
@@ -100,7 +165,7 @@ static void imu_thread(void *p1, void *p2, void *p3)
         k_msleep(1000);
     }
 
-    /* First enable the MCU GPIO interrupt */
+    /* Enable the MCU GPIO interrupt first. */
     ret = gpio_pin_interrupt_configure(
         imu_gpio_port,
         IMU_INT_PIN,
@@ -112,7 +177,7 @@ static void imu_thread(void *p1, void *p2, void *p3)
         return;
     }
 
-    /* Then enable Data Ready interrupt on the MPU6050 */
+    /* Then enable Data Ready interrupt on the MPU6050. */
     ret = imu_enable_data_ready_interrupt();
 
     if (ret < 0) {
@@ -120,6 +185,22 @@ static void imu_thread(void *p1, void *p2, void *p3)
         return;
     }
 
+    /*
+     * Calibrate the gyroscope before publishing measurements.
+     * If calibration fails, retry while keeping the IMU invalid.
+     */
+    while (1) {
+        ret = imu_calibrate_gyro();
+
+        if (ret == 0) {
+            break;
+        }
+
+        telemetry_flag_set(FLAG_IMU_INVALID);
+        k_msleep(1000);
+    }
+
+    /* Normal acquisition loop */
     while (1) {
 
         /* Block until the GPIO ISR gives the semaphore. */
@@ -134,14 +215,19 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
         if (ret == 0) {
 
+            /* Apply gyroscope offset correction. */
+            float corrected_gyro_x = imu.gyro_x - gyro_offset_x;
+            float corrected_gyro_y = imu.gyro_y - gyro_offset_y;
+            float corrected_gyro_z = imu.gyro_z - gyro_offset_z;
+
             telemetry_set_imu(
                 (int32_t)(imu.accel_x * 100.0f),
                 (int32_t)(imu.accel_y * 100.0f),
                 (int32_t)(imu.accel_z * 100.0f),
 
-                (int32_t)(imu.gyro_x * 10.0f),
-                (int32_t)(imu.gyro_y * 10.0f),
-                (int32_t)(imu.gyro_z * 10.0f)
+                (int32_t)(corrected_gyro_x * 10.0f),
+                (int32_t)(corrected_gyro_y * 10.0f),
+                (int32_t)(corrected_gyro_z * 10.0f)
             );
 
         } else {
