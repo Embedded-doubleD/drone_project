@@ -3,9 +3,12 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/sys/printk.h>
 
+#include <stdlib.h>
+
 #include "app/events.h"
 #include "input/button_service.h"
 #include "sensors/ldr_service.h"
+#include "sensors/temp_hum_service.h"
 
 /* Power policy API: used only when CONFIG_PM is enabled. */
 #ifdef CONFIG_PM
@@ -49,5 +52,23 @@ int main(void)
         printk("LDR acquisition failed: %d\n", ret);
     }
 
+    int32_t temp_dc;
+    int32_t hum_dpct;
+
+    ret = temp_hum_init();
+
+    if (ret != 0) {
+        printk("Si7021 initialization failed: %d\n", ret);
+    } else {
+        ret = temp_hum_read(&temp_dc, &hum_dpct);
+
+        if (ret != 0) {
+            printk("Si7021 acquisition failed: %d\n", ret);
+        } else {
+            printk("Si7021: temp=%d.%d C, humidity=%d.%d %%\n",
+                  temp_dc / 10, abs(temp_dc % 10),
+                  hum_dpct / 10, hum_dpct % 10);
+        }
+    }
     return 0;
 }
