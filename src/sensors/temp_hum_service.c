@@ -1,5 +1,7 @@
 
 #include <errno.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -20,10 +22,10 @@
 #define SI7021_READ_RETRIES     5
 #define SI7021_RETRY_DELAY_MS   2
 
-#define ENV_STACK_SIZE          1024
-#define ENV_PRIORITY            7
-
 static const struct device *const i2c_dev = DEVICE_DT_GET(I2C_NODE);
+
+static bool initialized = false;
+
 
 /* Lee una palabra de 16 bits del Si7021. */
 static int si7021_read_word(uint8_t command, uint16_t *value)
@@ -47,6 +49,7 @@ static int si7021_read_word(uint8_t command, uint16_t *value)
     return 0;
 }
 
+
 /* Lee humedad y temperatura asociada a la misma conversión. */
 static int si7021_read_environment(int32_t *temp_dc, int32_t *hum_dpct)
 {
@@ -54,7 +57,7 @@ static int si7021_read_environment(int32_t *temp_dc, int32_t *hum_dpct)
     uint8_t data[2];
     uint16_t raw_rh;
     uint16_t raw_temp;
-    int ret = -EIO;
+    int ret;
 
     /* Iniciar conversión de humedad. */
     ret = i2c_write(i2c_dev, &command, 1, SI7021_ADDR);
@@ -107,37 +110,46 @@ static int si7021_read_environment(int32_t *temp_dc, int32_t *hum_dpct)
     return 0;
 }
 
-static void env_thread(void *p1, void *p2, void *p3)
-{
-    int32_t temp_dc;
-    int32_t hum_dpct;
-    int ret;
 
-    ARG_UNUSED(p1);
-    ARG_UNUSED(p2);
-    ARG_UNUSED(p3);
+/* Inicializa el servicio del Si7021. */
+int temp_hum_init(void)
+{
+    if (initialized) {
+        return 0;
+    }
 
     if (!device_is_ready(i2c_dev)) {
-        telemetry_flag_set(FLAG_ENV_INVALID);
-        return;
+        return -ENODEV;
     }
 
-    while (1) {
-        ret = si7021_read_environment(&temp_dc, &hum_dpct);
+    initialized = true;
 
-        if (ret == 0) {
-            telemetry_set_env(temp_dc, hum_dpct);
-        } else {
-            telemetry_flag_set(FLAG_ENV_INVALID);
-        }
-
-        k_msleep(ENV_PERIOD_MS);
-    }
+    return 0;
 }
 
-K_THREAD_DEFINE(env_tid,
-                ENV_STACK_SIZE,
-                env_thread,
-                NULL, NULL, NULL,
-                ENV_PRIORITY,
-                0, 0);
+
+/* Realiza una adquisición síncrona de temperatura y humedad. */
+int temp_hum_read(int32_t *temp_dc, int32_t *hum_dpct)
+{
+    int ret;
+
+    if (!initialized) {
+        return -EACCES;
+    }
+
+    if (temp_dc == NULL || hum_dpct == NULL) {
+        return -EINVAL;
+    }
+
+    ret = si7021_read_environment(temp_dc, hum_dpct);
+
+    if (ret != 0) {
+        telemetry_flag_set(FLAG_ENV_INVALID);
+        return ret;
+    }
+
+    telemetry_set_env(*temp_dc, *hum_dpct);
+    telemetry_flag_clear(FLAG_ENV_INVALID);
+
+    return 0;
+}
