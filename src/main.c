@@ -3,23 +3,28 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/sys/printk.h>
 
-#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include "app/events.h"
 #include "input/button_service.h"
 #include "sensors/ldr_service.h"
 #include "sensors/temp_hum_service.h"
+#include "fsm.h"
 
-/* Power policy API: used only when CONFIG_PM is enabled. */
 #ifdef CONFIG_PM
 #include <zephyr/pm/policy.h>
 #endif
 
-#define PM_SUBSTATE_STOP2 3
+#define PM_SUBSTATE_STOP2       3
+#define SENSOR_PERIOD_MS        3000
+#define MAIN_LOOP_SLEEP_MS      10
 
 int main(void)
 {
     int ret;
+    bool ldr_ready = false;
+    bool env_ready = false;
 
     events_init();
 
@@ -34,41 +39,74 @@ int main(void)
     );
 #endif
 
-    if (button_service_init() != 0) {
-        printk("Button init failed\n");
+    /* Initialize button service. */
+    ret = button_service_init();
+
+    if (ret != 0) {
+        printk("Button initialization failed: %d\n", ret);
     }
 
+    /* Initialize LDR service. */
     ret = ldr_service_init();
 
-    if (ret != 0) {
+    if (ret == 0) {
+        ldr_ready = true;
+    } else {
         printk("LDR initialization failed: %d\n", ret);
-        return 0;
     }
 
-    /* One single LDR acquisition. */
-    ret = ldr_service_read();
-
-    if (ret != 0) {
-        printk("LDR acquisition failed: %d\n", ret);
-    }
-
-    int32_t temp_dc;
-    int32_t hum_dpct;
-
+    /* Initialize Si7021 service. */
     ret = temp_hum_init();
 
-    if (ret != 0) {
-        printk("Si7021 initialization failed: %d\n", ret);
+    if (ret == 0) {
+        env_ready = true;
     } else {
-        ret = temp_hum_read(&temp_dc, &hum_dpct);
-
-        if (ret != 0) {
-            printk("Si7021 acquisition failed: %d\n", ret);
-        } else {
-            printk("Si7021: temp=%d.%d C, humidity=%d.%d %%\n",
-                  temp_dc / 10, abs(temp_dc % 10),
-                  hum_dpct / 10, hum_dpct % 10);
-        }
+        printk("Si7021 initialization failed: %d\n", ret);
     }
+
+    /* Initialize FSM in the main thread. */
+    ret = fsm_init();
+
+    if (ret != 0) {
+        printk("FSM initialization failed: %d\n", ret);
+    }
+
+    int64_t next_sensor_read = 0;
+
+    while (1) {
+
+        /* Process button events and FSM logic. */
+        fsm_process();
+
+        /* Periodic sensor acquisition. */
+        int64_t now = k_uptime_get();
+
+        if (now >= next_sensor_read) {
+
+            if (ldr_ready) {
+                ret = ldr_service_read();
+
+                if (ret != 0) {
+                    printk("LDR acquisition failed: %d\n", ret);
+                }
+            }
+
+            if (env_ready) {
+                int32_t temp_dc;
+                int32_t hum_dpct;
+
+                ret = temp_hum_read(&temp_dc, &hum_dpct);
+
+                if (ret != 0) {
+                    printk("Si7021 acquisition failed: %d\n", ret);
+                }
+            }
+
+            next_sensor_read = k_uptime_get() + SENSOR_PERIOD_MS;
+        }
+
+        k_msleep(MAIN_LOOP_SLEEP_MS);
+    }
+
     return 0;
 }

@@ -1,18 +1,20 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/atomic.h>
+
 #include "fsm.h"
 #include "events.h"
 #include "led_service.h"
 #include "output_service.h"
 #include "telemetry_data.h"
+#include "config.h"
 
-#define FSM_STACK_SIZE   1024   /* PROVISIONAL: medir el uso real en la placa */
-#define FSM_PRIORITY     5      /* PROVISIONAL */
-#define DEBOUNCE_MS      0      /* ignora rebotes del pulsador (lo gestiona la placa en nuestro caso) */
-#define LED_REFRESH_MS   500    /* en NORMAL, refresca el color con el estado del tracker */
+#define DEBOUNCE_MS      0
 
-/* El modo lo escribe solo este hilo y lo leen otros: atomic evita lecturas a medias */
-static atomic_t mode = ATOMIC_INIT(FSM_MODE_TEST);   /* el sistema arranca en TEST */
+static atomic_t mode = ATOMIC_INIT(FSM_MODE_TEST);
+
+static int64_t last_press;
+static int64_t last_led_refresh;
+static bool initialized;
 
 fsm_mode_t fsm_get_mode(void)
 {
@@ -21,11 +23,16 @@ fsm_mode_t fsm_get_mode(void)
 
 static led_color_t color_for_state(tracker_state_t st)
 {
-    switch (st) {                      /* NORMAL: verde IDLE, amarillo FLYING, rojo PROBLEM */
-    case TRACKER_FLYING:  return LED_COLOR_YELLOW;
-    case TRACKER_PROBLEM: return LED_COLOR_RED;
+    switch (st) {
+    case TRACKER_FLYING:
+        return LED_COLOR_YELLOW;
+
+    case TRACKER_PROBLEM:
+        return LED_COLOR_RED;
+
     case TRACKER_IDLE:
-    default:              return LED_COLOR_GREEN;
+    default:
+        return LED_COLOR_GREEN;
     }
 }
 
@@ -34,11 +41,13 @@ static led_color_t color_for(fsm_mode_t m)
     telemetry_t t;
 
     if (m == FSM_MODE_TEST) {
-        return LED_COLOR_BLUE;         /* TEST = azul */
+        return LED_COLOR_BLUE;
     }
+
     if (m == FSM_MODE_SIMU) {
-        return LED_COLOR_MAGENTA;      /* SIMU = magenta, independiente del estado */
+        return LED_COLOR_MAGENTA;
     }
+
     telemetry_get(&t);
     return color_for_state(t.state);
 }
@@ -46,48 +55,72 @@ static led_color_t color_for(fsm_mode_t m)
 static fsm_mode_t next_mode(fsm_mode_t m)
 {
     switch (m) {
-    case FSM_MODE_TEST:   return FSM_MODE_NORMAL;
-    case FSM_MODE_NORMAL: return FSM_MODE_SIMU;
+    case FSM_MODE_TEST:
+        return FSM_MODE_NORMAL;
+
+    case FSM_MODE_NORMAL:
+        return FSM_MODE_SIMU;
+
     case FSM_MODE_SIMU:
-    default:              return FSM_MODE_TEST;   /* ciclo TEST -> NORMAL -> SIMU -> TEST */
+    default:
+        return FSM_MODE_TEST;
     }
 }
 
 static void enter_mode(fsm_mode_t m)
 {
     atomic_set(&mode, m);
-    output_service_set_mode(m);     /* cambia la cadencia y el tipo de salida */
+
+    output_service_set_mode(m);
     led_set_color(color_for(m));
 }
 
-static void fsm_thread(void *p1, void *p2, void *p3)
+int fsm_init(void)
 {
-    event_t event;
-    int64_t last_press = 0;
+    int ret = led_init();
 
-    ARG_UNUSED(p1);
-    ARG_UNUSED(p2);
-    ARG_UNUSED(p3);
-
-    if (led_init() != 0) {
-        return;                      /* sin LED no se puede continuar; sin texto para no ensuciar la salida */
+    if (ret != 0) {
+        return ret;
     }
+
+    last_press = 0;
+    last_led_refresh = k_uptime_get();
+    initialized = true;
+
     enter_mode(FSM_MODE_TEST);
 
-    while (1) {
-        int ret = events_receive(&event, K_MSEC(LED_REFRESH_MS));
+    return 0;
+}
 
-        if (ret == 0 && event.type == EVENT_BUTTON_SHORT_PRESS) {
-            int64_t now = k_uptime_get();
+void fsm_process(void)
+{
+    event_t event;
+    int64_t now;
+
+    if (!initialized) {
+        return;
+    }
+
+    /* Process all currently pending events without blocking. */
+    while (events_receive(&event, K_NO_WAIT) == 0) {
+
+        if (event.type == EVENT_BUTTON_SHORT_PRESS) {
+            now = k_uptime_get();
+
             if (now - last_press >= DEBOUNCE_MS) {
                 last_press = now;
                 enter_mode(next_mode(fsm_get_mode()));
             }
-        } else if (fsm_get_mode() == FSM_MODE_NORMAL) {
-            led_set_color(color_for(FSM_MODE_NORMAL));   /* sigue el estado IDLE/FLYING/PROBLEM */
         }
-        /* Otros eventos (lecturas ADC, pulsacion larga) no cambian el modo */
+    }
+
+    /* Refresh the LED periodically in NORMAL mode. */
+    now = k_uptime_get();
+
+    if ((fsm_get_mode() == FSM_MODE_NORMAL) &&
+        (now - last_led_refresh >= LED_REFRESH_MS)) {
+
+        led_set_color(color_for(FSM_MODE_NORMAL));
+        last_led_refresh = now;
     }
 }
-
-K_THREAD_DEFINE(fsm_tid, FSM_STACK_SIZE, fsm_thread, NULL, NULL, NULL, FSM_PRIORITY, 0, 0);

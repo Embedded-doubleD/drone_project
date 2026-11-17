@@ -18,4 +18,6 @@
 #define LDR_RAW_BRIGHT        4095    /* PENDIENTE: medir con luz maxima */
 #define LDR_CALIBRATED        0       /* 1 = calibrado, 0 = pendiente de calibrar */
 
+#define LED_REFRESH_MS        500
+
 #endif /* CONFIG_H */
