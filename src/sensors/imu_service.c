@@ -15,6 +15,8 @@
 
 #define IMU_STACK_SIZE  1024
 #define IMU_PRIORITY    6
+#define IMU_DATA_READY_TIMEOUT_MS 500
+#define IMU_RECOVERY_DELAY_MS     1000
 
 /* Gyroscope calibration */
 #define IMU_CALIBRATION_SAMPLES       200
@@ -200,14 +202,35 @@ static void imu_thread(void *p1, void *p2, void *p3)
         k_msleep(1000);
     }
 
-    /* Normal acquisition loop */
+
+        /* Normal acquisition loop */
     while (1) {
 
-        /* Block until the GPIO ISR gives the semaphore. */
-        ret = k_sem_take(&imu_data_ready_sem, K_FOREVER);
+        ret = k_sem_take(
+            &imu_data_ready_sem,
+            K_MSEC(IMU_DATA_READY_TIMEOUT_MS)
+        );
 
-        if (ret < 0) {
+        if (ret != 0) {
             telemetry_flag_set(FLAG_IMU_INVALID);
+
+            /* Try to recover the sensor and its interrupt. */
+            while (1) {
+                k_sem_reset(&imu_data_ready_sem);
+
+                ret = imu_init();
+
+                if (ret == 0) {
+                    ret = imu_enable_data_ready_interrupt();
+                }
+
+                if (ret == 0) {
+                    break;
+                }
+
+                k_msleep(IMU_RECOVERY_DELAY_MS);
+            }
+
             continue;
         }
 
@@ -215,7 +238,6 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
         if (ret == 0) {
 
-            /* Apply gyroscope offset correction. */
             float corrected_gyro_x = imu.gyro_x - gyro_offset_x;
             float corrected_gyro_y = imu.gyro_y - gyro_offset_y;
             float corrected_gyro_z = imu.gyro_z - gyro_offset_z;
@@ -229,6 +251,8 @@ static void imu_thread(void *p1, void *p2, void *p3)
                 (int32_t)(corrected_gyro_y * 10.0f),
                 (int32_t)(corrected_gyro_z * 10.0f)
             );
+
+            telemetry_flag_clear(FLAG_IMU_INVALID);
 
         } else {
             telemetry_flag_set(FLAG_IMU_INVALID);
