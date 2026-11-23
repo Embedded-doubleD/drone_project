@@ -92,7 +92,7 @@ int fsm_init(void)
     return 0;
 }
 
-void fsm_process(void)
+void fsm_process(k_timeout_t timeout)
 {
     event_t event;
     int64_t now;
@@ -101,17 +101,23 @@ void fsm_process(void)
         return;
     }
 
-    /* Process all currently pending events without blocking. */
-    while (events_receive(&event, K_NO_WAIT) == 0) {
+    /*
+     * Wait for the first event, with the specified timeout.
+     * If an event arrives, process it and then drain the queue.
+     */
+    if (events_receive(&event, timeout) == 0) {
 
-        if (event.type == EVENT_BUTTON_SHORT_PRESS) {
-            now = k_uptime_get();
+        do {
+            if (event.type == EVENT_BUTTON_SHORT_PRESS) {
+                now = k_uptime_get();
 
-            if (now - last_press >= DEBOUNCE_MS) {
-                last_press = now;
-                enter_mode(next_mode(fsm_get_mode()));
+                if (now - last_press >= DEBOUNCE_MS) {
+                    last_press = now;
+                    enter_mode(next_mode(fsm_get_mode()));
+                }
             }
-        }
+
+        } while (events_receive(&event, K_NO_WAIT) == 0);
     }
 
     /* Refresh the LED periodically in NORMAL mode. */

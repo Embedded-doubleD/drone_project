@@ -152,15 +152,22 @@ int ldr_service_read(void)
         ldr_raw_to_dpct(event.adc_raw)
     );
 
+#if LDR_CALIBRATED
     if (event.adc_raw < LDR_RAW_DARK ||
         event.adc_raw > LDR_RAW_BRIGHT) {
 
         telemetry_flag_set(FLAG_LDR_INVALID);
     }
 
-#if LDR_CALIBRATED
     telemetry_flag_clear(FLAG_CAL_PENDING);
+#else
+    if (event.adc_raw < 0 ||
+        event.adc_raw > 4095) {
+
+        telemetry_flag_set(FLAG_LDR_INVALID);
+    }
 #endif
+
 
     return events_send(&event);
 }

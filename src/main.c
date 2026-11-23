@@ -35,9 +35,11 @@ int main(void)
 #endif
 
     ret = button_service_init();
+    if (ret != 0) {
+        return 0;
+    }
 
     ret = ldr_service_init();
-
     if (ret != 0) {
         telemetry_flag_set(FLAG_LDR_INVALID);
     } else {
@@ -45,7 +47,6 @@ int main(void)
     }
 
     ret = temp_hum_init();
-
     if (ret != 0) {
         telemetry_flag_set(FLAG_ENV_INVALID);
     } else {
@@ -53,33 +54,72 @@ int main(void)
     }
 
     ret = fsm_init();
-
     if (ret != 0) {
         return 0;
     }
 
-    int64_t next_light = k_uptime_get();
-    int64_t next_env = k_uptime_get();
+    int64_t now = k_uptime_get();
+
+    int64_t next_light = now;
+    int64_t next_env = now;
+    int64_t next_led = now + LED_REFRESH_MS;
 
     while (1) {
-        int64_t now = k_uptime_get();
+        now = k_uptime_get();
 
-        fsm_process();
-
+        /* LDR acquisition */
         if (ldr_ready && now >= next_light) {
-            ldr_service_read();
-            next_light = now + LIGHT_PERIOD_MS;
+            ret = ldr_service_read();
+
+            now = k_uptime_get();
+            do {
+                next_light += LIGHT_PERIOD_MS;
+            } while (next_light <= now);
         }
 
+        /* Si7021 acquisition */
         if (env_ready && now >= next_env) {
             int32_t temp_dc;
             int32_t hum_dpct;
 
-            temp_hum_read(&temp_dc, &hum_dpct);
-            next_env = now + ENV_PERIOD_MS;
+            ret = temp_hum_read(&temp_dc, &hum_dpct);
+
+            now = k_uptime_get();
+            do {
+                next_env += ENV_PERIOD_MS;
+            } while (next_env <= now);
         }
 
-        k_sleep(K_MSEC(10));
+        /* Calculate the nearest deadline */
+        now = k_uptime_get();
+
+        int64_t wake = next_led;
+
+        if (ldr_ready && next_light < wake) {
+            wake = next_light;
+        }
+
+        if (env_ready && next_env < wake) {
+            wake = next_env;
+        }
+
+        int64_t wait = wake - now;
+
+        if (wait < 0) {
+            wait = 0;
+        }
+
+        /* Wait for an event or the next scheduled acquisition */
+        fsm_process(K_MSEC(wait));
+
+        /* Advance LED deadline */
+        now = k_uptime_get();
+
+        if (now >= next_led) {
+            do {
+                next_led += LED_REFRESH_MS;
+            } while (next_led <= now);
+        }
     }
 
     return 0;
