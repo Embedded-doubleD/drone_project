@@ -34,10 +34,7 @@ int main(void)
     );
 #endif
 
-    ret = button_service_init();
-    if (ret != 0) {
-        return 0;
-    }
+    button_service_init();
 
     ret = ldr_service_init();
     if (ret != 0) {
