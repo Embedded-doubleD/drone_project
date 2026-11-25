@@ -146,9 +146,50 @@ int attitude_update(float ax, float ay, float az,
     */
     if (dt_s <= ATTITUDE_MAX_GYRO_DT_S) {
 
-        estimate.roll_deg += gx * dt_s;
-        estimate.pitch_deg += gy * dt_s;
-        estimate.yaw_deg += gz * dt_s;
+    const float DEG_TO_RAD = ATTITUDE_PI / 180.0f;
+
+    const float phi =
+        estimate.roll_deg * DEG_TO_RAD;
+
+    const float theta =
+        estimate.pitch_deg * DEG_TO_RAD;
+
+    const float p = gx * DEG_TO_RAD;
+    const float q = gy * DEG_TO_RAD;
+    const float r = gz * DEG_TO_RAD;
+
+    const float sin_phi = sinf(phi);
+    const float cos_phi = cosf(phi);
+    const float cos_theta = cosf(theta);
+
+    // Prevent singularities when the pitch angle is close to ±90 degrees
+    if (fabsf(cos_theta) > 0.1f) {
+
+        const float tan_theta =
+            tanf(theta);
+
+        const float roll_rate =
+            p +
+            (sin_phi * tan_theta * q) +
+            (cos_phi * tan_theta * r);
+
+        const float pitch_rate =
+            (cos_phi * q) -
+            (sin_phi * r);
+
+        const float yaw_rate =
+            (sin_phi / cos_theta * q) +
+            (cos_phi / cos_theta * r);
+
+        estimate.roll_deg +=
+            roll_rate * dt_s * ATTITUDE_RAD_TO_DEG;
+
+        estimate.pitch_deg +=
+            pitch_rate * dt_s * ATTITUDE_RAD_TO_DEG;
+
+        estimate.yaw_deg +=
+            yaw_rate * dt_s * ATTITUDE_RAD_TO_DEG;
+        }
     }
 
     /*
