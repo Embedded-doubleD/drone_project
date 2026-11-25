@@ -9,6 +9,7 @@
 
 #include "imu_service.h"
 #include "telemetry_data.h"
+#include "processing/attitude.h"
 
 /* MPU6050 interrupt GPIO */
 #define IMU_INT_PIN 6
@@ -153,6 +154,13 @@ static void imu_thread(void *p1, void *p2, void *p3)
     imu_data_t imu;
     int ret;
 
+    attitude_t attitude;
+    int64_t now_ms;
+    int64_t last_sample_ms = 0;
+    float dt_s;
+
+    attitude_reset();
+
     /* Initialize GPIO first, while sensor interrupts are disabled. */
     ret = imu_gpio_interrupt_init();
 
@@ -202,6 +210,8 @@ static void imu_thread(void *p1, void *p2, void *p3)
         k_msleep(1000);
     }
 
+    telemetry_flag_set(FLAG_YAW_UNRELIABLE);
+
 
         /* Normal acquisition loop */
     while (1) {
@@ -242,6 +252,16 @@ static void imu_thread(void *p1, void *p2, void *p3)
             float corrected_gyro_y = imu.gyro_y - gyro_offset_y;
             float corrected_gyro_z = imu.gyro_z - gyro_offset_z;
 
+            now_ms = k_uptime_get();
+
+            if (last_sample_ms == 0) {
+                dt_s = 0.020f;
+            } else {
+                dt_s = (float)(now_ms - last_sample_ms) / 1000.0f;
+            }
+
+            last_sample_ms = now_ms;
+
             telemetry_set_imu(
                 (int32_t)(imu.accel_x * 100.0f),
                 (int32_t)(imu.accel_y * 100.0f),
@@ -251,6 +271,25 @@ static void imu_thread(void *p1, void *p2, void *p3)
                 (int32_t)(corrected_gyro_y * 10.0f),
                 (int32_t)(corrected_gyro_z * 10.0f)
             );
+
+            ret = attitude_update(
+                imu.accel_x,
+                imu.accel_y,
+                imu.accel_z,
+                corrected_gyro_x,
+                corrected_gyro_y,
+                corrected_gyro_z,
+                dt_s,
+                &attitude
+            );
+
+            if (ret == 0) {
+                telemetry_set_attitude(
+                    (int32_t)(attitude.roll_deg * 100.0f),
+                    (int32_t)(attitude.pitch_deg * 100.0f),
+                    (int32_t)(attitude.yaw_deg * 100.0f)
+                );
+            }
 
             telemetry_flag_clear(FLAG_IMU_INVALID);
 
