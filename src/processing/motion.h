@@ -13,6 +13,12 @@ typedef struct {
 void motion_reset(void);
 
 /*
+    Fija la gravedad de referencia (m/s2) medida con la placa quieta al arrancar.
+    Devuelve -EINVAL si queda fuera de +-10% de 9,80665 (placa en movimiento). 
+*/
+int motion_set_gravity(float g_m_s2);
+
+/*
     Integra la aceleración (m/s2, ejes del sensor) con la orientación (grados)
     compensando la gravedad. Devuelve 0, o -EINVAL si algun dato no es valido.
 */

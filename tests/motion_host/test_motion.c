@@ -44,6 +44,21 @@ int main(void)
     m = run(50, 1.0f, 0, G, 0, 0, 0, 90.0f);
     CHECK(m.y_m > 0.4f && fabsf(m.x_m) < 0.05f, "yaw 90: aceleracion en X del sensor va a Y local");
 
+    /* Sesgo vertical de -0,6 m/s2 (mayor que el umbral de reposo): reproduce la caida de Z. */
+    motion_reset();
+    m = run(3000, 0, 0, G - 0.6f, 0, 0, 0, 0);
+    printf("sin calibrar gravedad: z tras 60 s = %.1f m\n", m.z_m);
+    CHECK(m.z_m < -500.0f, "sesgo grande sin calibrar: Z deriva (documenta el problema)");
+
+    /* Con la gravedad de referencia medida, Z deja de caer. */
+    motion_reset();
+    CHECK(motion_set_gravity(G - 0.6f) == 0, "gravedad de referencia valida");
+    m = run(3000, 0, 0, G - 0.6f, 0, 0, 0, 0);
+    printf("con gravedad calibrada: z tras 60 s = %.3f m\n", m.z_m);
+    CHECK(fabsf(m.z_m) < 0.05f, "con la gravedad calibrada Z no deriva");
+    CHECK(motion_set_gravity(15.0f) == -EINVAL, "gravedad absurda rechazada");
+    motion_set_gravity(G);
+
     CHECK(motion_update(0, 0, G, 0, 0, 0, 0, 0, 0, 0.0f, &m) == -EINVAL, "dt=0 invalido");
     CHECK(motion_update(NAN, 0, G, 0, 0, 0, 0, 0, 0, 0.02f, &m) == -EINVAL, "NaN invalido");
     CHECK(motion_update(0, 0, G, 0, 0, 0, 0, 0, 0, 0.02f, NULL) == -EINVAL, "out NULL invalido");

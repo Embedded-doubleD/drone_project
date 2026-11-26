@@ -6,6 +6,7 @@
 #include <zephyr/sys/util.h>
 
 #include <errno.h>
+#include <math.h>
 
 #include "imu_service.h"
 #include "telemetry_data.h"
@@ -37,6 +38,8 @@ K_SEM_DEFINE(imu_data_ready_sem, 0, 1);
 static float gyro_offset_x = 0.0f;
 static float gyro_offset_y = 0.0f;
 static float gyro_offset_z = 0.0f;
+
+static float accel_norm_ref = 9.80665f;
 
 /*
  * GPIO interrupt handler.
@@ -102,6 +105,7 @@ static int imu_calibrate_gyro(void)
     float sum_x = 0.0f;
     float sum_y = 0.0f;
     float sum_z = 0.0f;
+    float sum_norm = 0.0f;
 
     int samples = 0;
     int errors = 0;
@@ -117,6 +121,8 @@ static int imu_calibrate_gyro(void)
         }
 
         ret = imu_read(&imu);
+
+        sum_norm += sqrtf(imu.accel_x*imu.accel_x + imu.accel_y*imu.accel_y + imu.accel_z*imu.accel_z);
 
         if (ret < 0) {
             errors++;
@@ -138,6 +144,8 @@ static int imu_calibrate_gyro(void)
     gyro_offset_x = sum_x / (float)IMU_CALIBRATION_SAMPLES;
     gyro_offset_y = sum_y / (float)IMU_CALIBRATION_SAMPLES;
     gyro_offset_z = sum_z / (float)IMU_CALIBRATION_SAMPLES;
+
+    accel_norm_ref = sum_norm / (float)IMU_CALIBRATION_SAMPLES;
 
     return 0;
 }
@@ -162,6 +170,7 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
     attitude_reset();
     motion_reset();
+    motion_set_gravity(accel_norm_ref);
 
     /* Initialize GPIO first, while sensor interrupts are disabled. */
     ret = imu_gpio_interrupt_init();
