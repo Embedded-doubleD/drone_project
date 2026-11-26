@@ -122,8 +122,6 @@ static int imu_calibrate_gyro(void)
 
         ret = imu_read(&imu);
 
-        sum_norm += sqrtf(imu.accel_x*imu.accel_x + imu.accel_y*imu.accel_y + imu.accel_z*imu.accel_z);
-
         if (ret < 0) {
             errors++;
 
@@ -133,6 +131,8 @@ static int imu_calibrate_gyro(void)
 
             continue;
         }
+
+        sum_norm += sqrtf(imu.accel_x*imu.accel_x + imu.accel_y*imu.accel_y + imu.accel_z*imu.accel_z);
 
         sum_x += imu.gyro_x;
         sum_y += imu.gyro_y;
@@ -170,7 +170,6 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
     attitude_reset();
     motion_reset();
-    motion_set_gravity(accel_norm_ref);
 
     /* Initialize GPIO first, while sensor interrupts are disabled. */
     ret = imu_gpio_interrupt_init();
@@ -223,6 +222,9 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
     telemetry_flag_set(FLAG_YAW_UNRELIABLE);
     telemetry_flag_set(FLAG_INERTIAL_ONLY);
+    if (motion_set_gravity(accel_norm_ref) != 0) {
+        telemetry_flag_set(FLAG_CAL_PENDING);   /* decisión vuestra, ver abajo */
+    }
 
 
         /* Normal acquisition loop */
@@ -301,16 +303,16 @@ static void imu_thread(void *p1, void *p2, void *p3)
                     (int32_t)(attitude.pitch_deg * 100.0f),
                     (int32_t)(attitude.yaw_deg * 100.0f)
                 );
-            }
 
-            motion_t motion;
-            if (motion_update(imu.accel_x, imu.accel_y, imu.accel_z,
-                            corrected_gyro_x, corrected_gyro_y, corrected_gyro_z,
-                            attitude.roll_deg, attitude.pitch_deg, attitude.yaw_deg,
-                            dt_s, &motion) == 0) {
-                telemetry_set_local((int32_t)(motion.x_m * 100.0f), (int32_t)(motion.y_m * 100.0f),
-                                    (int32_t)(motion.z_m * 100.0f), (int32_t)(motion.vx_ms * 100.0f),
-                                    (int32_t)(motion.vy_ms * 100.0f), (int32_t)(motion.vz_ms * 100.0f));
+                motion_t motion;
+                if (motion_update(imu.accel_x, imu.accel_y, imu.accel_z,
+                                corrected_gyro_x, corrected_gyro_y, corrected_gyro_z,
+                                attitude.roll_deg, attitude.pitch_deg, attitude.yaw_deg,
+                                dt_s, &motion) == 0) {
+                    telemetry_set_local((int32_t)(motion.x_m * 100.0f), (int32_t)(motion.y_m * 100.0f),
+                                        (int32_t)(motion.z_m * 100.0f), (int32_t)(motion.vx_ms * 100.0f),
+                                        (int32_t)(motion.vy_ms * 100.0f), (int32_t)(motion.vz_ms * 100.0f));
+                }
             }
 
             telemetry_flag_clear(FLAG_IMU_INVALID);
