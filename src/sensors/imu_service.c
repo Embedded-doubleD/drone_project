@@ -9,9 +9,10 @@
 
 #include "imu_service.h"
 #include "telemetry_data.h"
-#include "processing/attitude.h"
 #include "app/fsm.h"
+#include "processing/attitude.h"
 #include "processing/statistics.h"
+#include "processing/tracker_status.h"
 
 /* MPU6050 interrupt GPIO */
 #define IMU_INT_PIN 6
@@ -153,6 +154,8 @@ static void imu_thread(void *p1, void *p2, void *p3)
     ARG_UNUSED(p2);
     ARG_UNUSED(p3);
 
+    telemetry_t status_telemetry;
+
     imu_data_t imu;
     int ret;
 
@@ -214,6 +217,7 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
     telemetry_flag_set(FLAG_YAW_UNRELIABLE);
 
+    tracker_status_init();
 
         /* Normal acquisition loop */
     while (1) {
@@ -305,6 +309,21 @@ static void imu_thread(void *p1, void *p2, void *p3)
             }
 
             telemetry_flag_clear(FLAG_IMU_INVALID);
+            
+            if (fsm_get_mode() == FSM_MODE_NORMAL) {
+
+                telemetry_get(&status_telemetry);
+
+                tracker_status_update(
+                    imu.accel_x,
+                    imu.accel_y,
+                    imu.accel_z,
+                    corrected_gyro_x,
+                    corrected_gyro_y,
+                    corrected_gyro_z,
+                    status_telemetry.flags
+                );
+            }
 
         } else {
             telemetry_flag_set(FLAG_IMU_INVALID);
