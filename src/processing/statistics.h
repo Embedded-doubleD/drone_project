@@ -3,7 +3,7 @@
 
 typedef struct {
     float mean;
-    float min; 
+    float min;
     float max;
     unsigned int count;
 } statistics_value_t;
@@ -17,11 +17,15 @@ typedef struct {
 } statistics_snapshot_t;
 
 void statistics_reset(void);
+
 void statistics_add_light(float value);
+
 void statistics_add_environment(float temperature,
                                  float humidity);
+
 void statistics_add_imu(float ax, float ay, float az,
                         float gx, float gy, float gz);
+
 void statistics_take_snapshot(statistics_snapshot_t *snapshot);
 
 #endif /* STATISTICS_H */

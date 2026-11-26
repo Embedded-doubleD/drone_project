@@ -40,7 +40,7 @@ static void accumulator_add(accumulator_t *acc, float value)
 }
 
 static void accumulator_snapshot(const accumulator_t *acc,
-                                 statistic_value_t *result)
+                                 statistics_value_t *result)
 {
     result->count = acc->count;
 
@@ -95,8 +95,8 @@ void statistics_add_imu(float ax, float ay, float az,
     float angular_velocity =
         sqrtf(gx * gx + gy * gy + gz * gz);
 
-    k_mutex_lock(&statistics_mutex);
-
+    k_mutex_lock(&statistics_mutex, K_FOREVER);
+    
     accumulator_add(&acceleration_acc, acceleration);
     accumulator_add(&angular_velocity_acc, angular_velocity);
 

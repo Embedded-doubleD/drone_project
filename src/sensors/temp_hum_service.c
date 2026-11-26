@@ -11,6 +11,8 @@
 #include "temp_hum_service.h"
 #include "telemetry_data.h"
 #include "config.h"
+#include "app/fsm.h"
+#include "processing/statistics.h"
 
 #define I2C_NODE                DT_ALIAS(i2c_bus)
 
@@ -149,6 +151,14 @@ int temp_hum_read(int32_t *temp_dc, int32_t *hum_dpct)
     }
 
     telemetry_set_env(*temp_dc, *hum_dpct);
+    
+    if (fsm_get_mode() == FSM_MODE_NORMAL) {
+        statistics_add_environment(
+            (float)*temp_dc / 10.0f,
+            (float)*hum_dpct / 10.0f
+        );
+    }
+    
     telemetry_flag_clear(FLAG_ENV_INVALID);
 
     return 0;

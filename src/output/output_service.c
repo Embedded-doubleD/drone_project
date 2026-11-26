@@ -8,6 +8,8 @@
 #include "telemetry_report.h"
 #include "telemetry_data.h"
 #include "config.h"
+#include "processing/statistics.h"
+#include "app/config.h"
 // Temporal
 #include "gps_service.h"
 
@@ -48,10 +50,67 @@ static void write_raw(const char *buf, size_t len) {
     }
 }
 
+static void print_statistics(void)
+{
+    statistics_snapshot_t stats;
+
+    statistics_take_snapshot(&stats);
+
+    printk("\nSTATISTICS (30 s):\n");
+
+    if (stats.light.count > 0) {
+        printk("LIGHT: mean=%.1f %% min=%.1f %% max=%.1f %%\n",
+               (double)stats.light.mean,
+               (double)stats.light.min,
+               (double)stats.light.max);
+    } else {
+        printk("LIGHT: no valid samples\n");
+    }
+
+    if (stats.temperature.count > 0) {
+        printk("TEMP: mean=%.1f C min=%.1f C max=%.1f C\n",
+               (double)stats.temperature.mean,
+               (double)stats.temperature.min,
+               (double)stats.temperature.max);
+    } else {
+        printk("TEMP: no valid samples\n");
+    }
+
+    if (stats.humidity.count > 0) {
+        printk("HUM: mean=%.1f %% min=%.1f %% max=%.1f %%\n",
+               (double)stats.humidity.mean,
+               (double)stats.humidity.min,
+               (double)stats.humidity.max);
+    } else {
+        printk("HUM: no valid samples\n");
+    }
+
+    if (stats.acceleration.count > 0) {
+        printk("ACC: mean=%.2f m/s2 min=%.2f m/s2 max=%.2f m/s2\n",
+               (double)stats.acceleration.mean,
+               (double)stats.acceleration.min,
+               (double)stats.acceleration.max);
+    } else {
+        printk("ACC: no valid samples\n");
+    }
+
+    if (stats.angular_velocity.count > 0) {
+        printk("GYRO: mean=%.2f deg/s min=%.2f deg/s max=%.2f deg/s\n",
+               (double)stats.angular_velocity.mean,
+               (double)stats.angular_velocity.min,
+               (double)stats.angular_velocity.max);
+    } else {
+        printk("GYRO: no valid samples\n");
+    }
+
+    printk("\n");
+}
+
 static void out_thread(void *p1, void *p2, void *p3) {
     static char frame[SIMU_FRAME_BUF];
     static char report[REPORT_BUF];
     uint16_t seq = 0;
+    int64_t next_statistics = 0;
     telemetry_t t;
 
     ARG_UNUSED(p1); ARG_UNUSED(p2); ARG_UNUSED(p3);
@@ -65,6 +124,20 @@ static void out_thread(void *p1, void *p2, void *p3) {
 
         fsm_mode_t mode = fsm_get_mode();
         telemetry_get(&t);
+
+        if (mode != FSM_MODE_NORMAL) {
+            next_statistics = 0;
+        } else {
+            int64_t now = k_uptime_get();
+
+            if (next_statistics == 0) {
+                statistics_reset();
+                next_statistics = now + 30000;
+            } else if (now >= next_statistics) {
+                print_statistics();
+                next_statistics += 30000;
+            }
+        }
 
         if (mode == FSM_MODE_SIMU) {
             int n = simu_frame_build(frame, sizeof frame, seq, k_uptime_get_32(), &t);

@@ -10,6 +10,8 @@
 #include "imu_service.h"
 #include "telemetry_data.h"
 #include "processing/attitude.h"
+#include "app/fsm.h"
+#include "processing/statistics.h"
 
 /* MPU6050 interrupt GPIO */
 #define IMU_INT_PIN 6
@@ -253,6 +255,17 @@ static void imu_thread(void *p1, void *p2, void *p3)
             float corrected_gyro_z = imu.gyro_z - gyro_offset_z;
 
             now_ms = k_uptime_get();
+
+            if (fsm_get_mode() == FSM_MODE_NORMAL) {
+                statistics_add_imu(
+                    imu.accel_x,
+                    imu.accel_y,
+                    imu.accel_z,
+                    corrected_gyro_x,
+                    corrected_gyro_y,
+                    corrected_gyro_z
+                );
+            }
 
             if (last_sample_ms == 0) {
                 dt_s = 0.020f;
