@@ -22,6 +22,7 @@ target_sources(app PRIVATE
     src/sensors/imu.c
     src/sensors/temp_hum_service.c
     src/processing/attitude.c
+    src/processing/statistics.c
 )
 
 target_include_directories(app PRIVATE
