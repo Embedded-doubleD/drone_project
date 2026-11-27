@@ -1,0 +1,166 @@
+# stack_raw_output.txt
+# Salidas en bruto del Zephyr Thread Analyzer y del firmware (consola ST-LINK VCP), 27-nov-2026.
+# Copiadas tal cual de lo pegado por el usuario desde la terminal. Las lineas que empiezan por "#"
+# son anotaciones anadidas despues; el resto no se ha modificado.
+# Algunos volcados empiezan a mitad de bloque porque la terminal los corto al copiar.
+# Build de medida (analizador activo y nombres de hilo activados): NO es el firmware final.
+
+# ======================================================================
+# A) ANTES del cambio de pilas (logging 768 B, idle 256 B)
+#    Bloque de estadisticas de 30 s (modo NORMAL, sin fix GPS). Muestra IMU STACK: unused=360.
+# ======================================================================
+ imu_thread_id       : STACK: unused  360 usage  664 / 1024 ( 64 %); CPU:   4 %
+                     : Total CPU cycles used: 2944639500
+ gps_tid             : STACK: unused 1560 usage  488 / 2048 ( 23 %); CPU:   0 %
+                     : Total CPU cycles used: 27261000
+ logging             : STACK: unused  156 usage  612 /  768 ( 79 %); CPU:   2 %
+                     : Total CPU cycles used: 2159914500
+ idle                : STACK: unused   48 usage  208 /  256 ( 81 %); CPU:  89 %
+                     : Total CPU cycles used: 65289637500
+ main                : STACK: unused  568 usage  456 / 1024 ( 44 %); CPU:   0 %
+                     : Total CPU cycles used: 23593499
+ ISR0                : STACK: unused 1720 usage  328 / 2048 ( 16 %); CPU:   0 %
+                     : Total CPU cycles used: 0
+
+STATISTICS (30 s):
+IMU STACK: unused=360 bytes
+LIGHT: mean=70.3 % min=69.4 % max=71.1 %
+TEMP: mean=22.8 C min=22.7 C max=22.8 C
+HUM: mean=51.3 % min=51.1 % max=51.4 %
+ACC: mean=8.96 m/s2 min=8.80 m/s2 max=9.12 m/s2
+GYRO: mean=0.08 deg/s min=0.01 deg/s max=0.20 deg/s
+
+GPS stats: ok=1517 bad=0 dropped=0
+MODE:NORMAL
+GPS: fix=0 sats=00 lat=+00.000000 lon=+000.000000 alt=+00000.0m time=--:--:--
+IMU: ax=+001.07m/s2 ay=+000.05m/s2 az=+008.90m/s2
+IMU: gx=+0000.0deg/s gy=+0000.0deg/s gz=+0000.0deg/s
+ATT: roll=+000.53deg pitch=-006.83deg yaw=+044.43deg
+LIGHT: 069.4%
+ENV: temp=+022.8C hum=051.2%
+STATUS: IDLE
+FLAGS: 0x00C2
+
+Thread analyze:
+ thread_analyzer     : STACK: unused  504 usage  520 / 1024 ( 50 %); CPU:   0 %
+                     : Total CPU cycles used: 39712500
+ out_tid             : STACK: unused 1344 usage  704 / 2048 ( 34 %); CPU:   2 %
+                     : Total CPU cycles used: 2102896500
+ imu_thread_id       : STACK: unused  360 usage  664 / 1024 ( 64 %); CPU:   4 %
+                     : Total CPU cycles used: 2954601000
+ gps_tid             : STACK: unused 1560 usage  488 / 2048 ( 23 %); CPU:   0 %
+                     : Total CPU cycles used: 27352500
+ logging             : STACK: unused  156 usage  612 /  768 ( 79 %); CPU:   2 %
+                     : Total CPU cycles used: 2167071000
+ idle                : STACK: unused   48 usage  208 /  256 ( 81 %); CPU:  89 %
+                     : Total CPU cycles used: 65510338500
+ main                : STACK: unused  544 usage  480 / 1024 ( 46 %); CPU:   0 %
+                     : Total CPU cycles used: 23707499
+ ISR0                : STACK: unused 1720 usage  328 / 2048 ( 16 %); CPU:   0 %
+                     : Total CPU cycles used: 0
+
+# ======================================================================
+# B) ANTES del cambio de pilas, DESPUES de desconectar y reconectar la IMU
+#    El primer informe muestra STATUS: PROBLEM; el siguiente, IDLE. logging llega a 648 B (peor caso).
+# ======================================================================
+ENV: temp=+022.9C hum=052.6%
+STATUS: PROBLEM
+FLAGS: 0x00C2
+
+Thread analyze:
+ thread_analyzer     : STACK: unused  504 usage  520 / 1024 ( 50 %); CPU:   0 %
+                     : Total CPU cycles used: 49420500
+ out_tid             : STACK: unused 1344 usage  704 / 2048 ( 34 %); CPU:   2 %
+                     : Total CPU cycles used: 2106417000
+ imu_thread_id       : STACK: unused  360 usage  664 / 1024 ( 64 %); CPU:   4 %
+                     : Total CPU cycles used: 3717268500
+ gps_tid             : STACK: unused 1560 usage  488 / 2048 ( 23 %); CPU:   0 %
+                     : Total CPU cycles used: 34171500
+ logging             : STACK: unused  120 usage  648 /  768 ( 84 %); CPU:   2 %
+                     : Total CPU cycles used: 2639706000
+ idle                : STACK: unused   48 usage  208 /  256 ( 81 %); CPU:  90 %
+                     : Total CPU cycles used: 82356964500
+ main                : STACK: unused  544 usage  480 / 1024 ( 46 %); CPU:   0 %
+                     : Total CPU cycles used: 31202999
+ ISR0                : STACK: unused 1720 usage  328 / 2048 ( 16 %); CPU:   0 %
+                     : Total CPU cycles used: 0
+GPS stats: ok=1900 bad=0 dropped=0
+MODE:NORMAL
+GPS: fix=0 sats=00 lat=+00.000000 lon=+000.000000 alt=+00000.0m time=--:--:--
+IMU: ax=+001.09m/s2 ay=+000.08m/s2 az=+008.89m/s2
+IMU: gx=+0000.0deg/s gy=+0000.0deg/s gz=+0000.0deg/s
+ATT: roll=+000.57deg pitch=-006.84deg yaw=+041.23deg
+LIGHT: 069.9%
+ENV: temp=+022.9C hum=052.8%
+STATUS: IDLE
+FLAGS: 0x00C2
+
+Thread analyze:
+ thread_analyzer     : STACK: unused  504 usage  520 / 1024 ( 50 %); CPU:   0 %
+                     : Total CPU cycles used: 49546500
+ out_tid             : STACK: unused 1344 usage  704 / 2048 ( 34 %); CPU:   2 %
+                     : Total CPU cycles used: 2106459000
+ imu_thread_id       : STACK: unused  360 usage  664 / 1024 ( 64 %); CPU:   4 %
+                     : Total CPU cycles used: 3727278000
+ gps_tid             : STACK: unused 1560 usage  488 / 2048 ( 23 %); CPU:   0 %
+                     : Total CPU cycles used: 34267500
+ logging             : STACK: unused  120 usage  648 /  768 ( 84 %); CPU:   2 %
+                     : Total CPU cycles used: 2645746500
+ idle                : STACK: unused   48 usage  208 /  256 ( 81 %); CPU:  90 %
+                     : Total CPU cycles used: 82578792000
+ main                : STACK: unused  544 usage  480 / 1024 ( 46 %); CPU:   0 %
+                     : Total CPU cycles used: 31319999
+ ISR0                : STACK: unused 1720 usage  328 / 2048 ( 16 %); CPU:   0 %
+                     : Total CPU cycles used: 0
+
+# ======================================================================
+# C) DESPUES del cambio de pilas (logging 1024 B, idle 320 B) - FINAL
+#    Arranque nuevo (yaw reiniciado). El primer informe muestra PROBLEM; el siguiente, IDLE.
+# ======================================================================
+                     : Total CPU cycles used: 1494000
+ logging             : STACK: unused  412 usage  612 / 1024 ( 59 %); CPU:   2 %
+                     : Total CPU cycles used: 114003000
+ idle                : STACK: unused  112 usage  208 /  320 ( 65 %); CPU:  94 %
+                     : Total CPU cycles used: 3819231000
+ main                : STACK: unused  568 usage  456 / 1024 ( 44 %); CPU:   0 %
+                     : Total CPU cycles used: 1514999
+ ISR0                : STACK: unused 1760 usage  288 / 2048 ( 14 %); CPU:   0 %
+                     : Total CPU cycles used: 0
+GPS stats: ok=85 bad=0 dropped=0
+MODE:NORMAL
+GPS: fix=0 sats=00 lat=+00.000000 lon=+000.000000 alt=+00000.0m time=--:--:--
+IMU: ax=+001.01m/s2 ay=+000.06m/s2 az=+008.92m/s2
+IMU: gx=+0000.0deg/s gy=+0000.0deg/s gz=+0000.0deg/s
+ATT: roll=+000.34deg pitch=-006.59deg yaw=+000.08deg
+LIGHT: 063.7%
+ENV: temp=+022.9C hum=052.2%
+STATUS: PROBLEM
+FLAGS: 0x00C2
+
+Thread analyze:
+ thread_analyzer     : STACK: unused  512 usage  512 / 1024 ( 50 %); CPU:   0 %
+                     : Total CPU cycles used: 2403000
+ out_tid             : STACK: unused 1376 usage  672 / 2048 ( 32 %); CPU:   0 %
+                     : Total CPU cycles used: 1305000
+ imu_thread_id       : STACK: unused  360 usage  664 / 1024 ( 64 %); CPU:   3 %
+                     : Total CPU cycles used: 129267000
+ gps_tid             : STACK: unused 1560 usage  488 / 2048 ( 23 %); CPU:   0 %
+                     : Total CPU cycles used: 1582500
+ logging             : STACK: unused  412 usage  612 / 1024 ( 59 %); CPU:   2 %
+                     : Total CPU cycles used: 120037500
+ idle                : STACK: unused  112 usage  208 /  320 ( 65 %); CPU:  94 %
+                     : Total CPU cycles used: 4041387000
+ main                : STACK: unused  568 usage  456 / 1024 ( 44 %); CPU:   0 %
+                     : Total CPU cycles used: 1631999
+ ISR0                : STACK: unused 1760 usage  288 / 2048 ( 14 %); CPU:   0 %
+                     : Total CPU cycles used: 0
+GPS stats: ok=90 bad=0 dropped=0
+MODE:NORMAL
+GPS: fix=0 sats=00 lat=+00.000000 lon=+000.000000 alt=+00000.0m time=--:--:--
+IMU: ax=+001.03m/s2 ay=+000.07m/s2 az=+008.88m/s2
+IMU: gx=+0000.0deg/s gy=+0000.0deg/s gz=+0000.0deg/s
+ATT: roll=+000.48deg pitch=-006.73deg yaw=+000.05deg
+LIGHT: 065.1%
+ENV: temp=+022.9C hum=052.1%
+STATUS: IDLE
+FLAGS: 0x00C2
