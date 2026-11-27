@@ -22,6 +22,8 @@ target_sources(app PRIVATE
     src/sensors/imu.c
     src/sensors/temp_hum_service.c
     src/processing/attitude.c
+    src/processing/statistics.c
+    src/processing/tracker_status.c
     src/processing/motion.c
 )
 

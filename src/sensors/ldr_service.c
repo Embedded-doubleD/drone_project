@@ -11,6 +11,8 @@
 #include "events.h"
 #include "telemetry_data.h"
 #include "config.h"
+#include "app/fsm.h"
+#include "processing/statistics.h"
 
 #ifdef CONFIG_PM
 #include <zephyr/pm/policy.h>
@@ -151,6 +153,12 @@ int ldr_service_read(void)
     telemetry_set_light(
         ldr_raw_to_dpct(event.adc_raw)
     );
+
+    if (fsm_get_mode() == FSM_MODE_NORMAL) {
+        statistics_add_light(
+            (float)ldr_raw_to_dpct(event.adc_raw) / 10.0f
+        );
+    }
 
 #if LDR_CALIBRATED
     if (event.adc_raw < LDR_RAW_DARK ||
