@@ -33,6 +33,7 @@ static int64_t critical_start_ms;
 static int64_t invalid_start_ms;
 static int64_t problem_recovery_start_ms;
 static bool problem_latched;
+static bool gps_communication_error;
 
 void tracker_status_init(void)
 {
@@ -45,6 +46,7 @@ void tracker_status_init(void)
     problem_recovery_start_ms = 0;
 
     problem_latched = false;
+    gps_communication_error = false;
 
     telemetry_set_state(TRACKER_IDLE);
 }
@@ -80,6 +82,20 @@ void tracker_status_imu_error(void)
     invalid_start_ms = k_uptime_get();
     problem_recovery_start_ms = 0;
     set_state(TRACKER_PROBLEM);
+}
+
+void tracker_status_gps_communication_error(void)
+{
+    telemetry_flag_set(FLAG_GPS_INVALID);
+    gps_communication_error = true;
+    problem_latched = true;
+    problem_recovery_start_ms = 0;
+    set_state(TRACKER_PROBLEM);
+}
+
+void tracker_status_gps_communication_recovered(void)
+{
+    gps_communication_error = false;
 }
 
 void tracker_status_update(float ax, float ay, float az,
@@ -135,6 +151,7 @@ void tracker_status_update(float ax, float ay, float az,
     if (problem_latched) {
         bool healthy =
             ((flags & (FLAG_IMU_INVALID | FLAG_IMPACT)) == 0U) &&
+            !gps_communication_error &&
             !critical_condition;
 
         if (healthy) {

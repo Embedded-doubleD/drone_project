@@ -12,6 +12,7 @@
 #include "nmea.h"
 #include "telemetry_data.h"
 #include "config.h"
+#include "processing/tracker_status.h"
 
 #define GPS_NODE            DT_ALIAS(gps)
 
@@ -21,6 +22,9 @@
 #define GPS_STACK_SIZE      2048    /* PROVISIONAL: medir el uso real en la placa */
 #define GPS_PRIORITY        6       /* PROVISIONAL: justificar frente a los hilos SIMU e IMU */
 #define GPS_STALE_MS        (3 * GPS_PERIOD_MS)
+/* A short silence only marks GPS data invalid; a longer silence is a
+ * persistent communication failure. */
+#define GPS_COMM_PROBLEM_MS (3 * GPS_STALE_MS)
 
 struct line { char text[LINE_MAX_LEN]; };
 
@@ -101,6 +105,8 @@ static void gps_thread(void *p1, void *p2, void *p3)
     struct line l;
     nmea_gga_t gga;
     bool stale = false;
+    bool communication_problem_reported = false;
+    int64_t stale_since = 0;
 
     ARG_UNUSED(p1);
     ARG_UNUSED(p2);
@@ -130,6 +136,9 @@ static void gps_thread(void *p1, void *p2, void *p3)
                 atomic_inc(&stat_gga_ok);
                 last_gga = k_uptime_get();
                 stale = false;
+                stale_since = 0;
+                communication_problem_reported = false;
+                tracker_status_gps_communication_recovered();
                 gps_publish(&gga);
             } else if (r != NMEA_ERR_NOT_GGA) {
                 atomic_inc(&stat_bad);      /* checksum erroneo o GGA ilegible */
@@ -140,7 +149,19 @@ static void gps_thread(void *p1, void *p2, void *p3)
         /* Sin GGA validas durante GPS_STALE_MS: el modulo ha dejado de responder */
         if (!stale && (k_uptime_get() - last_gga) > GPS_STALE_MS) {
             stale = true;
+            stale_since = k_uptime_get();
             telemetry_set_gps(0, 0, 0, 0, 0);
+        }
+
+        /*
+         * A no-fix GPS still emits valid GGA sentences, so it only sets
+         * GPS_INVALID.  PROBLEM is reserved for a prolonged total loss of
+         * communication, such as removing the GPS supply.
+         */
+        if (stale && !communication_problem_reported &&
+            (k_uptime_get() - stale_since) >= GPS_COMM_PROBLEM_MS) {
+            communication_problem_reported = true;
+            tracker_status_gps_communication_error();
         }
     }
 }

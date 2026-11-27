@@ -12,5 +12,7 @@ void tracker_status_update(float ax, float ay, float az,
                            uint16_t flags);
 
 void tracker_status_imu_error(void);
+void tracker_status_gps_communication_error(void);
+void tracker_status_gps_communication_recovered(void);
 
 #endif /* TRACKER_STATUS_H */
