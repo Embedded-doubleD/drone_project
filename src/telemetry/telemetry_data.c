@@ -89,6 +89,18 @@ void telemetry_set_state(tracker_state_t state)
     k_mutex_unlock(&telemetry_lock);
 }
 
+void telemetry_set_local(int32_t x_cm, int32_t y_cm, int32_t z_cm, int32_t vx_cms, int32_t vy_cms, int32_t vz_cms)
+{
+    k_mutex_lock(&telemetry_lock, K_FOREVER);
+    data.x_cm = x_cm;
+    data.y_cm = y_cm;
+    data.z_cm = z_cm;
+    data.vx_cms = vx_cms;
+    data.vy_cms = vy_cms;
+    data.vz_cms = vz_cms;
+    k_mutex_unlock(&telemetry_lock);
+}
+
 void telemetry_flag_set(uint16_t mask)
 {
     k_mutex_lock(&telemetry_lock, K_FOREVER);

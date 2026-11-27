@@ -6,10 +6,12 @@
 #include <zephyr/sys/util.h>
 
 #include <errno.h>
+#include <math.h>
 
 #include "imu_service.h"
 #include "telemetry_data.h"
 #include "processing/attitude.h"
+#include "processing/motion.h"
 
 /* MPU6050 interrupt GPIO */
 #define IMU_INT_PIN 6
@@ -36,6 +38,8 @@ K_SEM_DEFINE(imu_data_ready_sem, 0, 1);
 static float gyro_offset_x = 0.0f;
 static float gyro_offset_y = 0.0f;
 static float gyro_offset_z = 0.0f;
+
+static float accel_norm_ref = 9.80665f;
 
 /*
  * GPIO interrupt handler.
@@ -101,6 +105,7 @@ static int imu_calibrate_gyro(void)
     float sum_x = 0.0f;
     float sum_y = 0.0f;
     float sum_z = 0.0f;
+    float sum_norm = 0.0f;
 
     int samples = 0;
     int errors = 0;
@@ -127,6 +132,8 @@ static int imu_calibrate_gyro(void)
             continue;
         }
 
+        sum_norm += sqrtf(imu.accel_x*imu.accel_x + imu.accel_y*imu.accel_y + imu.accel_z*imu.accel_z);
+
         sum_x += imu.gyro_x;
         sum_y += imu.gyro_y;
         sum_z += imu.gyro_z;
@@ -137,6 +144,8 @@ static int imu_calibrate_gyro(void)
     gyro_offset_x = sum_x / (float)IMU_CALIBRATION_SAMPLES;
     gyro_offset_y = sum_y / (float)IMU_CALIBRATION_SAMPLES;
     gyro_offset_z = sum_z / (float)IMU_CALIBRATION_SAMPLES;
+
+    accel_norm_ref = sum_norm / (float)IMU_CALIBRATION_SAMPLES;
 
     return 0;
 }
@@ -160,6 +169,7 @@ static void imu_thread(void *p1, void *p2, void *p3)
     float dt_s;
 
     attitude_reset();
+    motion_reset();
 
     /* Initialize GPIO first, while sensor interrupts are disabled. */
     ret = imu_gpio_interrupt_init();
@@ -211,6 +221,9 @@ static void imu_thread(void *p1, void *p2, void *p3)
     }
 
     telemetry_flag_set(FLAG_YAW_UNRELIABLE);
+    telemetry_flag_set(FLAG_INERTIAL_ONLY);
+    /* Si se rechaza, motion sigue con 9,80665 y Z puede derivar (limitación documentada). */
+    (void)motion_set_gravity(accel_norm_ref);
 
 
         /* Normal acquisition loop */
@@ -289,6 +302,16 @@ static void imu_thread(void *p1, void *p2, void *p3)
                     (int32_t)(attitude.pitch_deg * 100.0f),
                     (int32_t)(attitude.yaw_deg * 100.0f)
                 );
+
+                motion_t motion;
+                if (motion_update(imu.accel_x, imu.accel_y, imu.accel_z,
+                                corrected_gyro_x, corrected_gyro_y, corrected_gyro_z,
+                                attitude.roll_deg, attitude.pitch_deg, attitude.yaw_deg,
+                                dt_s, &motion) == 0) {
+                    telemetry_set_local((int32_t)(motion.x_m * 100.0f), (int32_t)(motion.y_m * 100.0f),
+                                        (int32_t)(motion.z_m * 100.0f), (int32_t)(motion.vx_ms * 100.0f),
+                                        (int32_t)(motion.vy_ms * 100.0f), (int32_t)(motion.vz_ms * 100.0f));
+                }
             }
 
             telemetry_flag_clear(FLAG_IMU_INVALID);

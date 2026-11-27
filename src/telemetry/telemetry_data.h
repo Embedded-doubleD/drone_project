@@ -58,4 +58,6 @@ void telemetry_set_state(tracker_state_t state);
 void telemetry_flag_set(uint16_t mask);
 void telemetry_flag_clear(uint16_t mask);
 
+void telemetry_set_local(int32_t x_cm, int32_t y_cm, int32_t z_cm, int32_t vx_cms, int32_t vy_cms, int32_t vz_cms);
+
 #endif /* TELEMETRY_DATA_H */
