@@ -2,12 +2,15 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #include "tracker_status.h"
 #include "telemetry_data.h"
 
 /* Physical constants */
 #define GRAVITY_M_S2                9.80665f
+#define GRAVITY_MIN_M_S2            (0.8f * GRAVITY_M_S2)
+#define GRAVITY_MAX_M_S2            (1.2f * GRAVITY_M_S2)
 
 /* Motion detection thresholds */
 #define FLYING_GYRO_THRESHOLD       8.0f
@@ -33,10 +36,14 @@ static int64_t critical_start_ms;
 static int64_t invalid_start_ms;
 static int64_t problem_recovery_start_ms;
 static bool problem_latched;
-static bool gps_communication_error;
+static float gravity_m_s2 = GRAVITY_M_S2;
+
+K_MUTEX_DEFINE(tracker_status_mutex);
 
 void tracker_status_init(void)
 {
+    k_mutex_lock(&tracker_status_mutex, K_FOREVER);
+
     current_state = TRACKER_IDLE;
 
     movement_start_ms = 0;
@@ -46,9 +53,25 @@ void tracker_status_init(void)
     problem_recovery_start_ms = 0;
 
     problem_latched = false;
-    gps_communication_error = false;
+    gravity_m_s2 = GRAVITY_M_S2;
 
     telemetry_set_state(TRACKER_IDLE);
+    k_mutex_unlock(&tracker_status_mutex);
+}
+
+int tracker_status_set_gravity(float g_m_s2)
+{
+    if (!isfinite(g_m_s2) ||
+        g_m_s2 < GRAVITY_MIN_M_S2 ||
+        g_m_s2 > GRAVITY_MAX_M_S2) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&tracker_status_mutex, K_FOREVER);
+    gravity_m_s2 = g_m_s2;
+    k_mutex_unlock(&tracker_status_mutex);
+
+    return 0;
 }
 
 static float acceleration_magnitude(float ax, float ay, float az)
@@ -71,6 +94,8 @@ static void set_state(tracker_state_t state)
 
 void tracker_status_imu_error(void)
 {
+    k_mutex_lock(&tracker_status_mutex, K_FOREVER);
+
     telemetry_flag_set(FLAG_IMU_INVALID);
 
     /*
@@ -82,26 +107,15 @@ void tracker_status_imu_error(void)
     invalid_start_ms = k_uptime_get();
     problem_recovery_start_ms = 0;
     set_state(TRACKER_PROBLEM);
-}
-
-void tracker_status_gps_communication_error(void)
-{
-    telemetry_flag_set(FLAG_GPS_INVALID);
-    gps_communication_error = true;
-    problem_latched = true;
-    problem_recovery_start_ms = 0;
-    set_state(TRACKER_PROBLEM);
-}
-
-void tracker_status_gps_communication_recovered(void)
-{
-    gps_communication_error = false;
+    k_mutex_unlock(&tracker_status_mutex);
 }
 
 void tracker_status_update(float ax, float ay, float az,
                            float gx, float gy, float gz,
                            uint16_t flags)
 {
+    k_mutex_lock(&tracker_status_mutex, K_FOREVER);
+
     int64_t now = k_uptime_get();
 
     float acceleration;
@@ -126,7 +140,7 @@ void tracker_status_update(float ax, float ay, float az,
     acceleration = acceleration_magnitude(ax, ay, az);
     angular_velocity = angular_velocity_magnitude(gx, gy, gz);
 
-    acceleration_deviation = fabsf(acceleration - GRAVITY_M_S2);
+    acceleration_deviation = fabsf(acceleration - gravity_m_s2);
 
     /* Critical angular velocity must persist. */
     critical_condition =
@@ -151,7 +165,6 @@ void tracker_status_update(float ax, float ay, float az,
     if (problem_latched) {
         bool healthy =
             ((flags & (FLAG_IMU_INVALID | FLAG_IMPACT)) == 0U) &&
-            !gps_communication_error &&
             !critical_condition;
 
         if (healthy) {
@@ -170,6 +183,7 @@ void tracker_status_update(float ax, float ay, float az,
 
         if (problem_latched) {
             set_state(TRACKER_PROBLEM);
+            k_mutex_unlock(&tracker_status_mutex);
             return;
         }
     }
@@ -208,4 +222,6 @@ void tracker_status_update(float ax, float ay, float az,
     } else {
         idle_start_ms = 0;
     }
+
+    k_mutex_unlock(&tracker_status_mutex);
 }

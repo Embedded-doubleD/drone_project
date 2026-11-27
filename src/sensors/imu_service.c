@@ -227,10 +227,10 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
     telemetry_flag_set(FLAG_YAW_UNRELIABLE);
     telemetry_flag_set(FLAG_INERTIAL_ONLY);
-    /* Si se rechaza, motion sigue con 9,80665 y Z puede derivar (limitación documentada). */
     (void)motion_set_gravity(accel_norm_ref);
 
     tracker_status_init();
+    (void)tracker_status_set_gravity(accel_norm_ref);
 
         /* Normal acquisition loop */
     while (1) {
@@ -352,20 +352,17 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
             telemetry_flag_clear(FLAG_IMU_INVALID);
             
-            if (fsm_get_mode() == FSM_MODE_NORMAL) {
+            telemetry_get(&status_telemetry);
 
-                telemetry_get(&status_telemetry);
-
-                tracker_status_update(
-                    imu.accel_x,
-                    imu.accel_y,
-                    imu.accel_z,
-                    corrected_gyro_x,
-                    corrected_gyro_y,
-                    corrected_gyro_z,
-                    status_telemetry.flags
-                );
-            }
+            tracker_status_update(
+                imu.accel_x,
+                imu.accel_y,
+                imu.accel_z,
+                corrected_gyro_x,
+                corrected_gyro_y,
+                corrected_gyro_z,
+                status_telemetry.flags
+            );
 
         } else {
             tracker_status_imu_error();

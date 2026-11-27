@@ -15,18 +15,27 @@
 
 #define OUT_STACK_SIZE    2048    /* PROVISIONAL: medir el uso real (buffers de 222 y 640 bytes) */
 #define OUT_PRIORITY      4       /* PROVISIONAL: más prioritario que los sensores */
+#define STATISTICS_PERIOD_MS 30000
 
 /* Consola = Virtual COM del ST-LINK, el canal que lee el simulador */
 static const struct device *const console_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+extern const k_tid_t imu_thread_id;
 
 static K_SEM_DEFINE(tick_sem, 0, 1);
+static K_SEM_DEFINE(statistics_tick_sem, 0, 1);
 
 static void tick_handler(struct k_timer *timer) {
     ARG_UNUSED(timer);
     k_sem_give(&tick_sem);
 }
 
+static void statistics_tick_handler(struct k_timer *timer) {
+    ARG_UNUSED(timer);
+    k_sem_give(&statistics_tick_sem);
+}
+
 K_TIMER_DEFINE(tick_timer, tick_handler, NULL);
+K_TIMER_DEFINE(statistics_timer, statistics_tick_handler, NULL);
 
 void output_service_set_mode(fsm_mode_t mode) {
     uint32_t period;
@@ -40,6 +49,16 @@ void output_service_set_mode(fsm_mode_t mode) {
 
     k_timer_start(&tick_timer, K_MSEC(period), K_MSEC(period));
     k_sem_give(&tick_sem);    /* primera salida inmediata al entrar en el modo */
+
+    k_timer_stop(&statistics_timer);
+    k_sem_reset(&statistics_tick_sem);
+
+    if (mode == FSM_MODE_NORMAL) {
+        statistics_reset();
+        k_timer_start(&statistics_timer,
+                      K_MSEC(STATISTICS_PERIOD_MS),
+                      K_MSEC(STATISTICS_PERIOD_MS));
+    }
 }
 
 /* Se escribe byte a byte con uart_poll_out y NO con printk: printk convierte '\n'
@@ -53,10 +72,16 @@ static void write_raw(const char *buf, size_t len) {
 static void print_statistics(void)
 {
     statistics_snapshot_t stats;
+    size_t imu_stack_unused;
 
     statistics_take_snapshot(&stats);
 
     printk("\nSTATISTICS (30 s):\n");
+
+    if (k_thread_stack_space_get(imu_thread_id, &imu_stack_unused) == 0) {
+        printk("IMU STACK: unused=%u bytes\n",
+               (unsigned)imu_stack_unused);
+    }
 
     if (stats.light.count > 0) {
         printk("LIGHT: mean=%.1f %% min=%.1f %% max=%.1f %%\n",
@@ -110,7 +135,6 @@ static void out_thread(void *p1, void *p2, void *p3) {
     static char frame[SIMU_FRAME_BUF];
     static char report[REPORT_BUF];
     uint16_t seq = 0;
-    int64_t next_statistics = 0;
     telemetry_t t;
 
     ARG_UNUSED(p1); ARG_UNUSED(p2); ARG_UNUSED(p3);
@@ -125,18 +149,9 @@ static void out_thread(void *p1, void *p2, void *p3) {
         fsm_mode_t mode = fsm_get_mode();
         telemetry_get(&t);
 
-        if (mode != FSM_MODE_NORMAL) {
-            next_statistics = 0;
-        } else {
-            int64_t now = k_uptime_get();
-
-            if (next_statistics == 0) {
-                statistics_reset();
-                next_statistics = now + 30000;
-            } else if (now >= next_statistics) {
-                print_statistics();
-                next_statistics += 30000;
-            }
+        if (mode == FSM_MODE_NORMAL &&
+            k_sem_take(&statistics_tick_sem, K_NO_WAIT) == 0) {
+            print_statistics();
         }
 
         if (mode == FSM_MODE_SIMU) {
