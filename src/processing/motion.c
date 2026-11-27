@@ -20,7 +20,7 @@ static float g_ref = MOTION_G_M_S2;
 int motion_set_gravity(float g_m_s2)
 {
     if (!isfinite(g_m_s2) ||
-        (g_m_s2 < 0.9f * MOTION_G_M_S2) || (g_m_s2 > 1.1f * MOTION_G_M_S2)) {
+        (g_m_s2 < 0.8f * MOTION_G_M_S2) || (g_m_s2 > 1.2f * MOTION_G_M_S2)) {
         return -EINVAL;
     }
     g_ref = g_m_s2;

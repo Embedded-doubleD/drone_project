@@ -222,9 +222,8 @@ static void imu_thread(void *p1, void *p2, void *p3)
 
     telemetry_flag_set(FLAG_YAW_UNRELIABLE);
     telemetry_flag_set(FLAG_INERTIAL_ONLY);
-    if (motion_set_gravity(accel_norm_ref) != 0) {
-        telemetry_flag_set(FLAG_CAL_PENDING);   /* decisión vuestra, ver abajo */
-    }
+    /* Si se rechaza, motion sigue con 9,80665 y Z puede derivar (limitación documentada). */
+    (void)motion_set_gravity(accel_norm_ref);
 
 
         /* Normal acquisition loop */
