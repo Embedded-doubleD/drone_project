@@ -11,4 +11,6 @@ void tracker_status_update(float ax, float ay, float az,
                            float gx, float gy, float gz,
                            uint16_t flags);
 
+void tracker_status_imu_error(void);
+
 #endif /* TRACKER_STATUS_H */

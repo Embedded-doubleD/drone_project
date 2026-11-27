@@ -20,7 +20,7 @@
 #define IMU_STACK_SIZE  1024
 #define IMU_PRIORITY    6
 #define IMU_DATA_READY_TIMEOUT_MS 500
-#define IMU_RECOVERY_DELAY_MS     1000
+#define IMU_RECOVERY_DELAY_MS     100
 
 /* Gyroscope calibration */
 #define IMU_CALIBRATION_SAMPLES       200
@@ -228,13 +228,31 @@ static void imu_thread(void *p1, void *p2, void *p3)
         );
 
         if (ret != 0) {
-            telemetry_flag_set(FLAG_IMU_INVALID);
+            /*
+             * Report the failure before attempting recovery.  Otherwise the
+             * old FLYING state can remain visible while the recovery loop is
+             * retrying the disconnected sensor.
+             */
+            tracker_status_imu_error();
 
             /* Try to recover the sensor and its interrupt. */
             while (1) {
                 k_sem_reset(&imu_data_ready_sem);
 
                 ret = imu_init();
+
+                if (ret == 0) {
+                    /*
+                     * Re-apply the MCU-side interrupt configuration after
+                     * reconnecting the IMU.  This is important when the
+                     * sensor was power-cycled or SDA was disconnected.
+                     */
+                    ret = gpio_pin_interrupt_configure(
+                        imu_gpio_port,
+                        IMU_INT_PIN,
+                        GPIO_INT_EDGE_RISING
+                    );
+                }
 
                 if (ret == 0) {
                     ret = imu_enable_data_ready_interrupt();
@@ -244,6 +262,7 @@ static void imu_thread(void *p1, void *p2, void *p3)
                     break;
                 }
 
+                tracker_status_imu_error();
                 k_msleep(IMU_RECOVERY_DELAY_MS);
             }
 
@@ -326,7 +345,7 @@ static void imu_thread(void *p1, void *p2, void *p3)
             }
 
         } else {
-            telemetry_flag_set(FLAG_IMU_INVALID);
+            tracker_status_imu_error();
         }
     }
 }
