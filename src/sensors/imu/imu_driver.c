@@ -1,6 +1,5 @@
 
-#include "imu_service.h"
-#include "telemetry_data.h"
+#include "imu_driver.h"
 #include "config.h"
 
 #include <zephyr/device.h>

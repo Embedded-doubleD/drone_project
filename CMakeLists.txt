@@ -18,13 +18,18 @@ target_sources(app PRIVATE
     src/telemetry/telemetry_data.c
     src/telemetry/simu_frame.c
     src/telemetry/telemetry_report.c
-    src/sensors/imu_service.c
-    src/sensors/imu.c
+    src/sensors/imu/imu_service.c
+    src/sensors/imu/imu_driver.c
+    src/sensors/imu/imu_interrupt.c
+    src/sensors/imu/imu_calibration.c
+    src/sensors/imu/imu_processor.c
+    src/sensors/imu/imu_recovery.c
     src/sensors/temp_hum_service.c
     src/processing/attitude.c
     src/processing/statistics.c
     src/processing/tracker_status.c
     src/processing/motion.c
+    src/processing/advanced_stats.c
 )
 
 target_include_directories(app PRIVATE
