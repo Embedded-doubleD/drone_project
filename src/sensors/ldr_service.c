@@ -154,6 +154,11 @@ int ldr_service_read(void)
         ldr_raw_to_dpct(event.adc_raw)
     );
 
+    /* TEMPORAL: solo para calibrar la LDR; quitar antes de commitear */
+    /*if (fsm_get_mode() == FSM_MODE_TEST) {
+        printk("LDR raw=%u\n", (unsigned)event.adc_raw);
+    }*/
+
     if (fsm_get_mode() == FSM_MODE_NORMAL) {
         statistics_add_light(
             (float)ldr_raw_to_dpct(event.adc_raw) / 10.0f
