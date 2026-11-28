@@ -25,6 +25,7 @@ target_sources(app PRIVATE
     src/processing/statistics.c
     src/processing/tracker_status.c
     src/processing/motion.c
+    src/processing/advanced_stats.c
 )
 
 target_include_directories(app PRIVATE
